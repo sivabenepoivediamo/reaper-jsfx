@@ -8,7 +8,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 
 | Effect | File | Type | What it does |
 | --- | --- | --- | --- |
-| Block Chords | `blockchords.jsfx` | MIDI | Turns single-note melodies into block chords |
+| Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
 
 More to come.
 
