@@ -9,7 +9,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 | Effect | File | Type | What it does |
 | --- | --- | --- | --- |
 | Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
-| Maestro FZ-1 Fuzz-Tone | `maestro_fz1.jsfx` | Audio | Three-stage germanium-style fuzz inspired by the Maestro FZ-1 |
+| Maestro FZ-1 Fuzz-Tone | `Maestro FZ-1 Fuzz Tone.jsfx` | Audio | Three-stage germanium-style fuzz inspired by the Maestro FZ-1 |
 
 More to come.
 
