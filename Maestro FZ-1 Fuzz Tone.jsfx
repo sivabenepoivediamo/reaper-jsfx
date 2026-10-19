@@ -2,7 +2,7 @@ desc:Maestro FZ-1 Fuzz-Tone
 tags:distortion fuzz
 version:1.0
 
-slider1:60<0,100,0.1>Attack
+slider1:60<0,100,0.1>Fuzz
 slider2:-12<-40,12,0.1>Volume (dB)
 slider3:35<0,100,0.1>Bias
 slider4:50<0,100,0.1>Tone
