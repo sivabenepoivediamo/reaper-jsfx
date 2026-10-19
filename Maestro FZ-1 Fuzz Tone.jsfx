@@ -1,0 +1,107 @@
+desc:Maestro FZ-1 Fuzz-Tone
+tags:distortion fuzz
+version:1.0
+
+slider1:60<0,100,0.1>Attack
+slider2:-12<-40,12,0.1>Volume (dB)
+slider3:35<0,100,0.1>Bias
+slider4:50<0,100,0.1>Tone
+slider5:25<0,100,0.1>Sag
+slider6:100<0,100,1>Mix (%)
+
+in_pin:In L
+in_pin:In R
+out_pin:Out L
+out_pin:Out R
+
+@init
+// soft clip, exact at |x|>=3
+function tanhf(x) (
+  x > 3 ? 1 : x < -3 ? -1 : x*(27 + x*x)/(27 + 9*x*x);
+);
+
+// germanium-like asymmetry: soft positive, lower negative ceiling
+function ge(x) (
+  x > 0 ? tanhf(x) : 0.7*tanhf(x/0.7);
+);
+
+function pole(f, fs) ( 1 - exp(-2*$pi*f/fs); );
+
+// lowpass biquad (anti-alias)
+function bq_set(f, q, fs) instance(a0,a1,a2,b1,b2) local(w,c,al,n) (
+  w = 2*$pi*f/fs; c = cos(w); al = sin(w)/(2*q); n = 1/(1 + al);
+  a0 = (1 - c)*0.5*n; a1 = (1 - c)*n; a2 = a0;
+  b1 = -2*c*n; b2 = (1 - al)*n;
+);
+function bq(x) instance(a0,a1,a2,b1,b2,z1,z2) local(y) (
+  y = a0*x + z1;
+  z1 = a1*x - b1*y + z2;
+  z2 = a2*x - b2*y;
+  y;
+);
+
+function fz_set(pg1,pg2,pb1,pb2,psg,pahp,pahp2,palp,patn,padc,pae,par)
+  instance(g1,g2,b1,b2,sg,ahp,ahp2,alp,atn,adc,ae,ar) (
+  g1 = pg1; g2 = pg2; b1 = pb1; b2 = pb2; sg = psg;
+  ahp = pahp; ahp2 = pahp2; alp = palp; atn = patn; adc = padc;
+  ae = pae; ar = par;
+);
+
+// Q1 gain stage -> coupling/Miller -> Q2 stage with bias sag -> Q3 buffer/tone
+function fz(x)
+  instance(g1,g2,b1,b2,sg,ahp,ahp2,alp,atn,adc,ae,ar,z1,z2,z3,z4,z5,env)
+  local(y,e) (
+  z1 += ahp*(x - z1);  y = x - z1;
+  y = ge(g1*y + b1);
+  z2 += ahp2*(y - z2); y -= z2;
+  z3 += alp*(y - z3);  y = z3;
+  e = abs(y);
+  env += (e - env)*(e > env ? ae : ar);
+  y = ge(g2*y + b2 - sg*env);
+  z4 += atn*(y - z4);  y = z4;
+  z5 += adc*(y - z5);
+  y - z5;
+);
+
+@slider
+a = slider1*0.01;
+fs2 = 2*srate;
+vol = 10^(slider2/20);
+mix = slider6*0.01;
+
+g1 = 10^((-6 + 50*a)/20);
+g2 = 6;
+b1 = slider3*0.01*2;
+b2 = slider3*0.01*0.5;
+sg = slider5*0.01*3;
+ahp  = pole(90, fs2);
+ahp2 = pole(250, fs2);
+alp  = pole(9000 - 5000*a, fs2);
+atn  = pole(1000*12^(slider4*0.01), fs2);
+adc  = pole(20, fs2);
+ae = 1 - exp(-1/(0.002*fs2));
+ar = 1 - exp(-1/(0.15*fs2));
+
+chL.fz_set(g1,g2,b1,b2,sg,ahp,ahp2,alp,atn,adc,ae,ar);
+chR.fz_set(g1,g2,b1,b2,sg,ahp,ahp2,alp,atn,adc,ae,ar);
+
+fc = 0.45*srate;
+aL1.bq_set(fc, 0.5412, fs2); aL2.bq_set(fc, 1.3066, fs2);
+aR1.bq_set(fc, 0.5412, fs2); aR2.bq_set(fc, 1.3066, fs2);
+
+@sample
+x = spl0;
+t = chL.fz(0.5*(pl + x));
+u = chL.fz(x);
+pl = x;
+aL2.bq(aL1.bq(t));
+wl = aL2.bq(aL1.bq(u));
+spl0 = x*(1 - mix) + wl*vol*mix;
+
+x = spl1;
+t = chR.fz(0.5*(pr + x));
+u = chR.fz(x);
+pr = x;
+aR2.bq(aR1.bq(t));
+wr = aR2.bq(aR1.bq(u));
+spl1 = x*(1 - mix) + wr*vol*mix;
