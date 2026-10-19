@@ -65,7 +65,7 @@ A stereo fuzz pedal inspired by the Maestro FZ-1 Fuzz-Tone. The two channels are
 
 The signal runs through a simplified model of the pedal's three transistor stages:
 
-- **Q1 gain stage:** a high-pass at 90 Hz (input coupling) feeds the first clipper. The **Attack** control sets how hard it is driven.
+- **Q1 gain stage:** a high-pass at 90 Hz (input coupling) feeds the first clipper. The **Fuzz** control sets how hard it is driven.
 - **Coupling and Miller filtering:** a 250 Hz high-pass between the stages, followed by a low-pass that gets darker as **Attack** goes up.
 - **Q2 stage with bias sag:** a second, fixed-gain clipper. An envelope follower (about 2 ms attack, 150 ms release) pulls this stage's bias down as the signal gets louder, which is what the **Sag** control scales.
 - **Q3 buffer and tone:** a low-pass sweeps from roughly 1 kHz to 12 kHz with **Tone**, then a 20 Hz high-pass removes DC.
@@ -77,14 +77,14 @@ The whole fuzz path runs at 2x oversampling, with a 4th-order Butterworth low-pa
 ### Usage
 
 1. Put the effect on an audio track, ideally first in the chain so it sees the raw instrument signal (guitar, bass, synth) before any other processing.
-2. Set **Attack** for the amount of fuzz and **Volume (dB)** to match your level.
+2. Set **Fuzz** for the amount of fuzz and **Volume (dB)** to match your level.
 3. Shape the sound with **Bias**, **Tone** and **Sag**.
 
 ### Controls
 
 | Control | Range | What it does |
 | --- | --- | --- |
-| Attack | 0 to 100 | Drive amount. Raises the Q1 gain from -6 dB to +44 dB and lowers the pre-clip low-pass from 9 kHz to 4 kHz |
+| Fuzz | 0 to 100 | Drive amount. Raises the Q1 gain from -6 dB to +44 dB and lowers the pre-clip low-pass from 9 kHz to 4 kHz |
 | Volume (dB) | -40 to +12 | Level of the processed signal |
 | Bias | 0 to 100 | Adds a DC offset ahead of the clipping stages, making the clipping more asymmetric. High settings get ragged and can starve the signal |
 | Tone | 0 to 100 | Output low-pass, from dark (about 1 kHz) to bright (about 12 kHz) |
@@ -95,7 +95,7 @@ The whole fuzz path runs at 2x oversampling, with a 4th-order Butterworth low-pa
 
 | Setting | Default |
 | --- | --- |
-| Attack | 60 |
+| Drive | 60 |
 | Volume (dB) | -12 |
 | Bias | 35 |
 | Tone | 50 |
