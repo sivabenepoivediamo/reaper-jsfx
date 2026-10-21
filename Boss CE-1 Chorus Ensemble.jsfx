@@ -1,0 +1,200 @@
+desc:Boss CE-1 Chorus Ensemble
+tags: chorus vibrato modulation BBD
+//
+// Boss / Roland CE-1 style chorus + vibrato
+//
+// Control behaviour follows the real unit:
+//   CHORUS mode  : only "Chorus Intensity" is active. It sets the LFO RATE
+//                  (~1 .. 3 Hz). Delay sweep is fixed. Triangle LFO.
+//                  Output = direct + delay.
+//   VIBRATO mode : "Vibrato Rate" (~3.2 .. 11.6 Hz) and "Vibrato Depth".
+//                  Sine-ish LFO. Output = delay only (true pitch vibrato).
+//   Chorus Intensity has no effect in Vibrato mode and vice versa.
+//
+// The BBD clock is modulated, so delay = dmin / (1 - k*u) (delay ~ 1/clock),
+// which gives the slightly asymmetric sweep a real BBD has.
+//
+// Output modes:
+//   Mono Mix       : single-output behaviour (chorus: dry+wet, vibrato: wet)
+//   Classic Stereo : L = Direct out, R = Effect out (like the original's 2 jacks)
+//   Dual           : two CE-1s, one per input channel, LFOs 90 deg apart
+
+// ---------- Main controls ----------
+slider1:mode_sw=0<0,1,1{Chorus,Vibrato}>Mode
+slider2:chorus_int=5<0,10,0.01>Chorus Intensity (sets rate)
+slider3:vib_rate_k=5<0,10,0.01>Vibrato Rate
+slider4:vib_depth_k=5<0,10,0.01>Vibrato Depth
+
+// ---------- Input / output ----------
+slider5:sens_sw=0<0,1,1{80 mV (Instrument),10 mV (Mic)}>Input Sensitivity
+slider6:level_k=7<0,10,0.01>Level
+slider7:out_mode=0<0,2,1{Mono Mix,Classic Stereo (L Direct / R Effect),Dual (2x CE-1)}>Output Mode
+slider8:out_db=0<-24,12,0.1>Output (dB)
+
+// ---------- Sound character ----------
+slider9:bbd_bw=9<3,16,0.1>BBD Bandwidth (kHz)
+slider10:bbd_noise=0<0,100,1>BBD Noise (%)
+slider11:lfo_drift=25<0,100,1>LFO Drift (%)
+
+// ---------- Advanced tuning (defaults are gentler than the one measurement found) ----------
+slider12:min_dly=3<1,6,0.05>Min Delay (ms)
+slider13:ch_sweep=5<3,9,0.05>Chorus Sweep Max (ms)
+slider14:vs_min=3.3<3,9,0.05>Vibrato Sweep Max @ Depth 0 (ms)
+slider15:vs_max=4.5<3,9,0.05>Vibrato Sweep Max @ Depth 10 (ms)
+slider16:vr_min=3.2<0.5,20,0.1>Vibrato Rate Min (Hz)
+slider17:vr_max=11.6<1,30,0.1>Vibrato Rate Max (Hz)
+
+in_pin:Left
+in_pin:Right
+out_pin:Left
+out_pin:Right
+
+@init
+BUFSIZE = 16384;            // per delay line, power of two
+MASK    = BUFSIZE - 1;
+memset(0, 0, BUFSIZE * 2);  // A line at 0, B line at BUFSIZE
+wp      = 0;
+ph      = 0;
+first   = 1;
+drift   = 0; dtgt = 0; dcnt = 0;
+
+smc = 1 - exp(-1 / (0.03 * srate));    // ~30 ms parameter smoothing
+dsm = 1 - exp(-1 / (0.5  * srate));    // drift smoothing
+
+lp1A = lp2A = lp1B = lp2B = 0;
+
+function tanh_(x) local(e) (
+  x = max(min(x, 10), -10);
+  e = exp(2 * x);
+  (e - 1) / (e + 1);
+);
+
+// LFO shape: m = 0 triangle (chorus), m = 1 sine (vibrato). p = phase 0..1
+function lfoshape(p, m) local(p2, tri, s) (
+  p2 = p + 0.75; p2 >= 1 ? p2 -= 1;
+  tri = 4 * abs(p2 - 0.5) - 1;
+  s   = sin(2 * $pi * p);
+  tri * (1 - m) + s * m;
+);
+
+// 4-point Hermite read from a delay line. base = line offset, d = delay (samples)
+function readtap(base, d) local(rp, i, f, y0, y1, y2, y3, c1, c2, c3)
+                          global(wp, BUFSIZE, MASK) (
+  rp = wp - d + BUFSIZE;
+  i  = floor(rp);
+  f  = rp - i;
+  y0 = base[(i - 1) & MASK];
+  y1 = base[i & MASK];
+  y2 = base[(i + 1) & MASK];
+  y3 = base[(i + 2) & MASK];
+  c1 = 0.5 * (y2 - y0);
+  c2 = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3;
+  c3 = 0.5 * (y3 - y0) + 1.5 * (y1 - y2);
+  ((c3 * f + c2) * f + c1) * f + y1;
+);
+
+@slider
+vib   = mode_sw;
+omode = out_mode;
+dual  = (omode == 2);
+
+// --- rate (Hz) ---
+// Chorus: Intensity knob -> 1 .. 3 Hz (exponential; 50% = 1.73 Hz)
+// Vibrato: Rate knob     -> vr_min .. vr_max (exponential)
+t_rate = vib ? vr_min * pow(max(vr_max, vr_min + 0.1) / vr_min, vib_rate_k / 10)
+             : 1.0 * pow(3.0, chorus_int / 10);
+
+// --- delay sweep: min delay fixed, max delay set by mode/depth ---
+t_dmin = min_dly * 0.001;                                 // seconds
+t_dmax = vib ? (vs_min + (vs_max - vs_min) * (vib_depth_k / 10)) * 0.001
+             : ch_sweep * 0.001;
+t_dmax = max(t_dmax, t_dmin + 0.0002);
+
+t_shape = vib;                                // 0 = triangle, 1 = sine
+t_dry   = vib ? 0 : 0.707;                    // mono-mix gains
+t_wet   = vib ? 1 : 0.707;
+
+// --- preamp ---
+g_sens = sens_sw ? 7.94 : 1.0;                // 10 mV vs 80 mV = +18 dB
+g_lvl  = pow(level_k / 7, 2);                 // audio-taper-ish, 7 = unity
+g_pre  = g_sens * g_lvl;
+bias   = 0.15;
+bias_o = tanh_(bias);
+pnorm  = 1 / (1 - bias_o * bias_o);
+
+noise_a   = (bbd_noise / 100) * 0.001;        // 100% = about -60 dB (spec S/N)
+drift_amt = (lfo_drift / 100) * 0.05;         // up to +-5% rate wander
+
+fc  = min(bbd_bw * 1000, 0.45 * srate);
+lpa = 1 - exp(-2 * $pi * fc / srate);
+
+outg = exp(out_db * 0.11512925);
+
+first ? (
+  c_rate = t_rate; c_dmax = t_dmax; c_dmin = t_dmin; c_shape = t_shape;
+  c_dry = t_dry; c_wet = t_wet;
+  first = 0;
+);
+
+@sample
+// smooth parameters
+c_rate  += (t_rate  - c_rate)  * smc;
+c_dmax  += (t_dmax  - c_dmax)  * smc;
+c_dmin  += (t_dmin  - c_dmin)  * smc;
+c_shape += (t_shape - c_shape) * smc;
+c_dry   += (t_dry   - c_dry)   * smc;
+c_wet   += (t_wet   - c_wet)   * smc;
+
+// slow random drift on LFO rate
+dcnt -= 1;
+dcnt <= 0 ? ( dtgt = rand(2) - 1; dcnt = 0.3 * srate; );
+drift += (dtgt - drift) * dsm;
+
+ph += c_rate * (1 + drift_amt * drift) / srate;
+ph >= 1 ? ph -= 1;
+phB = ph + 0.25; phB >= 1 ? phB -= 1;          // quadrature for dual mode
+
+// preamp
+xA = dual ? spl0 : (spl0 + spl1) * 0.5;
+xB = spl1;
+preA = (tanh_(xA * g_pre + bias) - bias_o) * pnorm;
+preB = (tanh_(xB * g_pre + bias) - bias_o) * pnorm;
+
+0[wp]        = preA;
+BUFSIZE[wp]  = preB;
+
+// BBD clock-modulated delay: delay = dmin / (1 - k*u), u = 0..1
+dmin = c_dmin * srate;
+k    = 1 - c_dmin / max(c_dmax, c_dmin + 0.0002);
+
+uA = 0.5 * (1 + lfoshape(ph,  c_shape));
+dA = dmin / (1 - k * uA);
+wetA = readtap(0, dA);
+
+dual ? (
+  uB = 0.5 * (1 + lfoshape(phB, c_shape));
+  dB = dmin / (1 - k * uB);
+  wetB = readtap(BUFSIZE, dB);
+) : wetB = wetA;
+
+wp = (wp + 1) & MASK;
+
+// BBD hiss
+noise_a > 0 ? (
+  wetA += (rand(2) - 1) * noise_a;
+  dual ? wetB += (rand(2) - 1) * noise_a;
+);
+
+// bandwidth limiting
+lp1A += lpa * (wetA - lp1A);  lp2A += lpa * (lp1A - lp2A);
+lp1B += lpa * (wetB - lp1B);  lp2B += lpa * (lp1B - lp2B);
+
+omode == 0 ? (
+  spl0 = spl1 = (preA * c_dry + lp2A * c_wet) * outg;
+) : omode == 1 ? (
+  spl0 = preA  * outg;        // Direct out
+  spl1 = lp2A  * outg;        // Effect out
+) : (
+  spl0 = (preA * c_dry + lp2A * c_wet) * outg;
+  spl1 = (preB * c_dry + lp2B * c_wet) * outg;
+);
