@@ -11,6 +11,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 | Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
 | Maestro FZ-1 Fuzz-Tone | `Maestro FZ-1 Fuzz Tone.jsfx` | Audio | Three-stage germanium-style fuzz inspired by the Maestro FZ-1 |
 | Dallas Arbiter Rangemaster Treble Booster | `Dallas Arbiter Rangemaster Treble Booster.jsfx` | Audio | Single-transistor germanium treble booster inspired by the Dallas Arbiter Rangemaster |
+| Boss CE-1 Chorus Ensemble | `Boss CE-1 Chorus Ensemble.jsfx` | Audio | BBD-style chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble |
 
 More to come.
 
@@ -162,6 +163,94 @@ The graph in the plugin window shows the small-signal frequency response (the li
 | Warmth (%) | 25 |
 | Oversampling | 4x |
 
+## Boss CE-1 Chorus Ensemble
+
+A chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble, the 1976 pedal built from the chorus circuit of the Roland JC-120 amp. The signal goes through a modulated delay line that stands in for the original's bucket-brigade (BBD) chip. It adds no latency, because the delay line is the effect.
+
+### How it works
+
+The two modes behave differently, as on the original:
+
+- **Chorus mode:** only **Chorus Intensity** is active, and it sets the LFO **rate** (about 1 to 3 Hz), not the depth. The delay sweep is fixed (3 to 5 ms) and the LFO is a triangle. The output is the direct signal plus the delayed signal, each at -3 dB.
+- **Vibrato mode:** **Vibrato Rate** (about 3.2 to 11.6 Hz) and **Vibrato Depth** are active, and Chorus Intensity does nothing. The LFO is sine-like. The dry signal is muted, so you hear a true pitch vibrato.
+
+Other parts of the model:
+
+- **Delay law:** a BBD's delay is inversely proportional to its clock frequency, and the LFO modulates the clock. The delay therefore follows `dmin / (1 - k * u)`, where `u` is the LFO (0 to 1). The sweep starts at the minimum delay and is slightly asymmetric, as on a real BBD. The delay line is read with 4-point Hermite interpolation.
+- **Preamp:** a mild asymmetric soft clipper with a small bias, which adds a little even-order colour. It is normalised so small signals pass at unity gain. **Input Sensitivity** adds 18 dB when set to 10 mV (the original's 80 mV / 10 mV switch), and **Level** scales the signal into the clipper.
+- **BBD bandwidth and noise:** the delayed signal goes through a two-pole low-pass (9 kHz by default), with optional hiss of up to about -60 dB, in line with the unit's 60 dB spec.
+- **LFO drift:** a slow random wander of the LFO rate, up to +/-5%, so the modulation is not perfectly regular.
+- **Smoothing:** the rate, delay, mode and mix settings are smoothed over about 30 ms, so switching modes or turning knobs does not click.
+
+The preamp is not oversampled, so very high **Level** or the Mic sensitivity setting with a hot input can alias slightly.
+
+### How faithful it is
+
+The rate and delay ranges come from one published measurement of a single unit (a forum post), cross-checked against the manuals where possible. They are not measured by me. That post's vibrato depth numbers (a sweep up to 7 ms) give pitch swings of well over 200 cents at the fastest rate, which sounded far too extreme, so the defaults here are gentler (see below). The preamp curve, the Level taper and the 9 kHz bandwidth are estimates tuned by ear. The interaction between a real guitar pickup and the pedal's input is not modelled.
+
+If you have a real CE-1 to compare with, the **Advanced tuning** sliders let you match its sweep widths, rate range and minimum delay.
+
+### Usage
+
+1. Put the effect on an audio track. A guitar, electric piano or synth works well.
+2. Pick **Chorus** or **Vibrato** with **Mode**.
+3. In Chorus mode, set **Chorus Intensity** for the speed. In Vibrato mode, set **Vibrato Rate** and **Vibrato Depth**.
+4. Choose an **Output Mode** and match the level with **Output (dB)**.
+
+**Output Mode** options:
+
+- **Mono Mix:** a single output. Chorus mode gives dry plus wet, Vibrato mode gives wet only. The stereo input is summed to mono first, like the pedal's single input.
+- **Classic Stereo:** left is the Direct output (preamp'd dry) and right is the Effect output (wet only), like the original's two jacks. The input is summed to mono first.
+- **Dual:** two CE-1s, one per input channel, with the two LFOs 90 degrees apart. The input stays stereo.
+
+With the default Vibrato settings, the pitch swing is roughly +/-40 cents at maximum depth and a 5 Hz rate, and roughly +/-95 cents at maximum depth and the fastest rate. At minimum depth it is roughly +/-5 cents at the slowest rate and +/-19 cents at the fastest. These are approximate, worked out from the delay sweep and rate. Depth in a delay-based vibrato grows with rate, so the fast end of **Vibrato Rate** always has the most swing.
+
+### Controls
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Mode | Chorus, Vibrato | Selects the effect. Only the controls for that mode are active |
+| Chorus Intensity | 0 to 10 | Chorus mode only. Sets the LFO rate, from about 1 to 3 Hz (exponential). Does not change the depth |
+| Vibrato Rate | 0 to 10 | Vibrato mode only. Sets the LFO rate between **Vibrato Rate Min** and **Max** (exponential) |
+| Vibrato Depth | 0 to 10 | Vibrato mode only. Widens the delay sweep from **Vibrato Sweep Max @ Depth 0** to **@ Depth 10** |
+| Input Sensitivity | 80 mV, 10 mV | 10 mV adds 18 dB of gain into the preamp, like the original's switch. Use it for quiet sources |
+| Level | 0 to 10 | Signal level into the preamp. 7 is unity gain and 10 is about +6 dB. Higher values clip harder |
+| Output Mode | Mono Mix, Classic Stereo, Dual | How the direct and delayed signals are routed to the outputs (see Usage) |
+| Output (dB) | -24 to +12 | Level out of the plugin |
+| BBD Bandwidth (kHz) | 3 to 16 | Low-pass on the delayed signal. Lower is darker and more like a worn BBD |
+| BBD Noise (%) | 0 to 100 | Hiss on the delayed signal. 100% is about -60 dB |
+| LFO Drift (%) | 0 to 100 | Slow random wander of the LFO rate. 100% is about +/-5% |
+| Min Delay (ms) | 1 to 6 | Shortest delay, where the sweep starts. Used by both modes |
+| Chorus Sweep Max (ms) | 3 to 9 | Longest delay reached in Chorus mode |
+| Vibrato Sweep Max @ Depth 0 (ms) | 3 to 9 | Longest delay reached in Vibrato mode with Vibrato Depth at 0 |
+| Vibrato Sweep Max @ Depth 10 (ms) | 3 to 9 | Longest delay reached in Vibrato mode with Vibrato Depth at 10. Raise it for a wilder vibrato |
+| Vibrato Rate Min (Hz) | 0.5 to 20 | LFO rate with Vibrato Rate at 0 |
+| Vibrato Rate Max (Hz) | 1 to 30 | LFO rate with Vibrato Rate at 10 |
+
+The sliders appear in four groups in this order: main controls (Mode to Vibrato Depth), input and output (Input Sensitivity to Output), sound character (BBD Bandwidth to LFO Drift), and advanced tuning (Min Delay to Vibrato Rate Max). Reordering them changes how saved presets and automation map to the controls.
+
+### Defaults
+
+| Setting | Default |
+| --- | --- |
+| Mode | Chorus |
+| Chorus Intensity | 5 |
+| Vibrato Rate | 5 |
+| Vibrato Depth | 5 |
+| Input Sensitivity | 80 mV |
+| Level | 7 |
+| Output Mode | Mono Mix |
+| Output (dB) | 0 |
+| BBD Bandwidth (kHz) | 9 |
+| BBD Noise (%) | 0 |
+| LFO Drift (%) | 25 |
+| Min Delay (ms) | 3 |
+| Chorus Sweep Max (ms) | 5 |
+| Vibrato Sweep Max @ Depth 0 (ms) | 3.3 |
+| Vibrato Sweep Max @ Depth 10 (ms) | 4.5 |
+| Vibrato Rate Min (Hz) | 3.2 |
+| Vibrato Rate Max (Hz) | 11.6 |
+
 ## Installation
 
 1. In REAPER, open **Options > Show REAPER resource path in explorer/finder**.
@@ -169,7 +258,7 @@ The graph in the plugin window shows the small-signal frequency response (the li
 3. In the FX browser, press **F5** to refresh, or restart REAPER.
 4. Add the effect to a track:
    - **JS: Block Chords (melody harmonizer)** on a MIDI track
-   - **JS: Maestro FZ-1 Fuzz-Tone**, **JS: Dallas Arbiter Rangemaster Treble Booster** on an audio track
+   - **JS: Maestro FZ-1 Fuzz-Tone**, **JS: Dallas Arbiter Rangemaster Treble Booster**, **JS: Boss CE-1 Chorus Ensemble** on an audio track
 
 REAPER stores slider values with the project and with FX presets. If you change the defaults in the file and an existing instance still shows the old values, add a fresh instance.
 
