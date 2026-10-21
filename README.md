@@ -10,6 +10,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 | --- | --- | --- | --- |
 | Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
 | Maestro FZ-1 Fuzz-Tone | `Maestro FZ-1 Fuzz Tone.jsfx` | Audio | Three-stage germanium-style fuzz inspired by the Maestro FZ-1 |
+| Rangemaster Treble Booster | `Dallas Arbiter Rangemaster Treble Booster.jsfx` | Audio | Single-transistor germanium treble booster inspired by the Dallas Arbiter Rangemaster |
 
 More to come.
 
@@ -102,6 +103,65 @@ The whole fuzz path runs at 2x oversampling, with a 4th-order Butterworth low-pa
 | Sag | 25 |
 | Mix (%) | 100 |
 
+## Dallas Arbiter Rangemaster Treble Booster
+
+A stereo treble booster inspired by the Dallas Arbiter Rangemaster, the single-germanium-transistor pedal behind a lot of 1960s and 70s lead tones. The two channels are processed independently, so it works on mono or stereo tracks. There is no dry/wet mix: it is a straight boost, like the original.
+
+### How it works
+
+The signal runs through a simplified model of the pedal's single transistor stage:
+
+- **Input coupling:** a one-pole high-pass formed by the input cap and the transistor's input impedance (the bias network in parallel with the transistor's hFE times a nominal emitter resistance). With the stock 5 nF cap the corner sits around 1.4 kHz, which is why the pedal sounds thin and treble-heavy.
+- **Range:** the stage gain, from about -4 dB to +26 dB. It sits ahead of the clipper, so turning it up also drives the transistor harder.
+- **Germanium stage:** an asymmetric soft clipper. Each half-wave has its own headroom, and **Bias** shifts the operating point, so the clipping is uneven and produces even-order harmonics. **Battery** scales the headroom, so a weaker battery clips earlier. **Warmth** adds a small squared term for extra even harmonics (the leakage-flavored part of germanium).
+- **Hi-cut and output coupling:** a one-pole low-pass, then a 20 nF output cap into a roughly 150 kOhm load (a high-pass at about 53 Hz). This also removes the DC offset that the asymmetric clipping creates.
+
+The clipper runs oversampled (2x, 4x or 8x) with a 6th-order Butterworth low-pass at 0.45 x the sample rate, capped at 20 kHz, on both the way up and the way down to keep aliasing down. These are IIR filters, so the plugin adds no latency.
+
+Component values are close to commonly published Rangemaster schematics but were tuned by ear, not matched to measurements. The interaction between a real guitar pickup and the pedal's low input impedance is not modelled, so feed it a DI'd guitar and set **Input Trim** to taste.
+
+### Usage
+
+1. Put the effect on an audio track, ideally first in the chain so it sees the raw guitar signal before any amp sim or other drive.
+2. Set **Range** for the amount of boost and **Output (dB)** to match your level.
+3. Shape the tone with **Input Cap** and **Hi-Cut**, and the character of the clipping with **Bias**, **Germanium Asymmetry** and **Battery**.
+
+At default settings the small-signal response runs from about -14 dB at 100 Hz to about +9 dB at 4 kHz (including the -6 dB output setting). Very quiet signals (around -40 dBFS or lower) stay fairly clean even at full Range. A typical guitar DI, around -20 to -10 dBFS, drives the stage much harder. If it is too clean, raise **Input Trim**, lower **Battery** or raise **Bias**.
+
+The graph in the plugin window shows the small-signal frequency response (the linear region, before any clipping), so it reacts to Range, Input Cap, Transistor hFE, Hi-Cut, Input Trim and Output. Bias, Germanium Asymmetry, Battery and Warmth only affect the clipping, so they do not move it.
+
+### Controls
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Range | 0 to 10 | Stage gain, from about -4 dB to +26 dB. Also sets how hard the transistor is driven |
+| Input Cap (nF) | 1 to 100 | Input coupling cap. The stock value is 5 nF. Try 10 to 47 nF for the well-known "fuller" mod |
+| Transistor hFE | 30 to 150 | Sets the input impedance, which moves the input high-pass corner (a higher hFE gives a lower corner), plus a slight gain change |
+| Bias (%) | -50 to +50 | Shifts the transistor's operating point. Away from 0 the two half-waves clip unevenly, adding even harmonics. Positive and negative values are mirror images |
+| Germanium Asymmetry (%) | 0 to 100 | How much more headroom one half-wave has than the other. At 0 the clipper is symmetric |
+| Battery (V) | 4 to 9.6 | Supply voltage. Headroom scales with voltage, so a weaker battery clips earlier and sounds more compressed |
+| Hi-Cut (Hz) | 2000 to 20000 | One-pole low-pass after the clipper |
+| Input Trim (dB) | -24 to +24 | Level into the stage, before the input high-pass |
+| Output (dB) | -36 to +12 | Level out of the plugin |
+| Warmth (%) | 0 to 100 | Amount of extra even-order harmonic content |
+| Oversampling | Off, 2x, 4x, 8x | Oversampling factor for the clipper. Higher is cleaner and uses more CPU |
+
+### Defaults
+
+| Setting | Default |
+| --- | --- |
+| Range | 7 |
+| Input Cap (nF) | 5 |
+| Transistor hFE | 75 |
+| Bias (%) | 0 |
+| Germanium Asymmetry (%) | 60 |
+| Battery (V) | 9 |
+| Hi-Cut (Hz) | 12000 |
+| Input Trim (dB) | 0 |
+| Output (dB) | -6 |
+| Warmth (%) | 25 |
+| Oversampling | 4x |
+
 ## Installation
 
 1. In REAPER, open **Options > Show REAPER resource path in explorer/finder**.
@@ -109,7 +169,7 @@ The whole fuzz path runs at 2x oversampling, with a 4th-order Butterworth low-pa
 3. In the FX browser, press **F5** to refresh, or restart REAPER.
 4. Add the effect to a track:
    - **JS: Block Chords (melody harmonizer)** on a MIDI track
-   - **JS: Maestro FZ-1 Fuzz-Tone** on an audio track
+   - **JS: Maestro FZ-1 Fuzz-Tone**, **JS: Dallas Arbiter Rangemaster Treble Booster** on an audio track
 
 REAPER stores slider values with the project and with FX presets. If you change the defaults in the file and an existing instance still shows the old values, add a fresh instance.
 
