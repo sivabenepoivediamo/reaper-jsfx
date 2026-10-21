@@ -1,0 +1,176 @@
+desc:Dallas Arbiter Rangemaster Treble Booster
+tags:distortion boost guitar treble germanium
+// -----------------------------------------------------------------------------
+// Dallas Arbiter Rangemaster-style germanium treble booster
+//
+// Signal path (modelled after the single-transistor circuit):
+//   Input trim -> input coupling cap + base impedance (1-pole high-pass)
+//   -> stage gain ("Range")
+//   -> asymmetric germanium-style transistor nonlinearity (oversampled)
+//   -> even-harmonic "leakage" term -> hi-cut -> output coupling cap -> output
+//
+// Notes:
+//  * Stock Rangemaster input cap is 5 nF. Higher values (10-47 nF) give the
+//    well-known "fuller" mod.
+//  * Component interaction with a real guitar pickup is NOT modelled; feed it
+//    a DI'd guitar and adjust Input Trim to taste.
+//  * Best placed first in the FX chain, before your amp sim / drive.
+// -----------------------------------------------------------------------------
+
+slider1:7<0,10,0.01>Range
+slider2:5<1,100,0.1:log=10>Input Cap (nF)
+slider3:75<30,150,1>Transistor hFE
+slider4:0<-50,50,1>Bias (%)
+slider5:60<0,100,1>Germanium Asymmetry (%)
+slider6:9<4,9.6,0.1>Battery (V)
+slider7:12000<2000,20000,10:log=6000>Hi-Cut (Hz)
+slider8:0<-24,24,0.1>Input Trim (dB)
+slider9:-6<-36,12,0.1>Output (dB)
+slider10:25<0,100,1>Warmth - Even Harmonics (%)
+slider11:2<0,3,1{Off,2x,4x,8x}>Oversampling
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@init
+// ---- helper functions ----------------------------------------------------
+
+// tanh (JSFX has none built in)
+function th(x) local(e) (
+  x > 12 ? 1 : x < -12 ? -1 : ( e = exp(2*x); (e-1)/(e+1) );
+);
+
+// asymmetric soft saturator: different headroom for each half-wave
+function sh(x, hpos, hneg) (
+  x >= 0 ? hpos*th(x/hpos) : hneg*th(x/hneg);
+);
+
+// biquad (transposed direct form II). c = coeff base in mem, s = state base in mem
+function bq(x, c, s) local(y, z1, z2) (
+  z1 = s[0];
+  z2 = s[1];
+  y  = c[0]*x + z1;
+  s[0] = c[1]*x - c[3]*y + z2;
+  s[1] = c[2]*x - c[4]*y;
+  y;
+);
+
+// memory map
+//   0..14    oversampling lowpass coefficients (3 biquads x 5)
+//   100..    upsampling filter states   (per channel, 6 each)
+//   120..    downsampling filter states (per channel, 6 each)
+//   200..    per-channel one-pole states (8 each)
+
+@slider
+// ---- gain / level --------------------------------------------------------
+trim = pow(10, slider8/20);
+ot   = pow(10, slider9/20);
+
+// Range pot: roughly -4 dB .. +26 dB of stage gain
+gdb  = -4 + 30*(slider1/10);
+gt   = pow(10, gdb/20) * pow(slider3/75, 0.3);
+
+// ---- smoothing -----------------------------------------------------------
+sm = 1 - exp(-1/(0.01*srate));
+init_done ? 0 : ( gs = gt; og = ot; init_done = 1; );
+
+// ---- input coupling: C (input cap) into base network || hFE*re -----------
+rin   = 1/(1/59400 + 1/(slider3*500));
+fc_in = min(1/(2*$pi*rin*slider2*0.000000001), 0.45*srate);
+a_in  = exp(-2*$pi*fc_in/srate);
+
+// ---- output coupling: 20 nF into ~150k load ------------------------------
+fc_out = 1/(2*$pi*150000*0.00000002);
+a_out  = exp(-2*$pi*fc_out/srate);
+
+// ---- hi-cut --------------------------------------------------------------
+fl   = min(slider7, 0.45*srate);
+a_lp = exp(-2*$pi*fl/srate);
+
+// ---- transistor model ----------------------------------------------------
+hv   = slider6/9;                         // battery sag reduces headroom
+hp   = 0.5*hv;                            // headroom, one half-wave
+hn   = 0.5*hv*(1 + 1.2*slider5/100);      // headroom, other half-wave
+vb   = slider4/100*0.4*hv;                // operating point shift
+y0   = sh(vb, hp, hn);                    // static offset to remove
+warm = slider10/100;
+
+// ---- oversampling filters (6th-order Butterworth lowpass) ----------------
+osf  = floor(pow(2, slider11) + 0.5);
+fsos = srate*osf;
+fcos = min(0.45*srate, 20000);
+w0   = 2*$pi*fcos/fsos;
+cs   = cos(w0);
+sn   = sin(w0);
+stage = 0;
+loop(3,
+  q  = stage == 0 ? 0.5176 : stage == 1 ? 0.7071 : 1.9319;
+  al = sn/(2*q);
+  a0 = 1 + al;
+  c  = stage*5;
+  c[0] = (1 - cs)/2/a0;
+  c[1] = (1 - cs)/a0;
+  c[2] = c[0];
+  c[3] = -2*cs/a0;
+  c[4] = (1 - al)/a0;
+  stage += 1;
+);
+
+@sample
+gs += (gt - gs)*sm;
+og += (ot - og)*sm;
+
+ch = 0;
+loop(2,
+  st = 200 + ch*8;
+  x  = (ch == 0 ? spl0 : spl1) * trim;
+
+  // 1) input coupling cap + base impedance (1-pole high-pass)
+  y = a_in*(st[1] + x - st[0]);
+  st[0] = x;
+  st[1] = y;
+
+  // 2) stage gain
+  u = y * gs;
+
+  // 3) germanium transistor stage (oversampled)
+  osf > 1 ? (
+    us = 100 + ch*6;
+    ds = 120 + ch*6;
+    i = 0;
+    loop(osf,
+      v = (i == 0) ? u*osf : 0;
+      v = bq(v, 0,  us);
+      v = bq(v, 5,  us + 2);
+      v = bq(v, 10, us + 4);
+
+      v = sh(v + vb, hp, hn) - y0;
+      v += warm*0.4*v*v;
+
+      v = bq(v, 0,  ds);
+      v = bq(v, 5,  ds + 2);
+      v = bq(v, 10, ds + 4);
+      i == 0 ? ( z = v; );
+      i += 1;
+    );
+  ) : (
+    z = sh(u + vb, hp, hn) - y0;
+    z += warm*0.4*z*z;
+  );
+
+  // 4) hi-cut
+  st[2] = (1 - a_lp)*z + a_lp*st[2];
+  z = st[2];
+
+  // 5) output coupling cap (also removes DC created by asymmetry)
+  y = a_out*(st[4] + z - st[3]);
+  st[3] = z;
+  st[4] = y;
+
+  y *= og;
+  ch == 0 ? ( spl0 = y; ) : ( spl1 = y; );
+  ch += 1;
+);
+
