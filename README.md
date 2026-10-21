@@ -10,7 +10,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 | --- | --- | --- | --- |
 | Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
 | Maestro FZ-1 Fuzz-Tone | `Maestro FZ-1 Fuzz Tone.jsfx` | Audio | Three-stage germanium-style fuzz inspired by the Maestro FZ-1 |
-| Rangemaster Treble Booster | `Dallas Arbiter Rangemaster Treble Booster.jsfx` | Audio | Single-transistor germanium treble booster inspired by the Dallas Arbiter Rangemaster |
+| Dallas Arbiter Rangemaster Treble Booster | `Dallas Arbiter Rangemaster Treble Booster.jsfx` | Audio | Single-transistor germanium treble booster inspired by the Dallas Arbiter Rangemaster |
 
 More to come.
 
