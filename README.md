@@ -171,7 +171,7 @@ A chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble, the 1976 pedal b
 
 The two modes behave differently, as on the original:
 
-- **Chorus mode:** only **Chorus Intensity** is active, and it sets the LFO **rate** (about 1 to 3 Hz), not the depth. The delay sweep is fixed (3 to 5 ms) and the LFO is a triangle. The output is the direct signal plus the delayed signal, each at -3 dB.
+- **Chorus mode:** only **Chorus Intensity** is active, and it sets the LFO **rate** (about 1 to 3 Hz), not the depth. The delay sweep is fixed (3 to 5 ms) and the LFO is a triangle, rounded toward a sine by default with **Chorus LFO Shape**. A pure triangle flips the pitch direction abruptly at each end of the sweep, which can sound warbly. The output is the direct signal plus the delayed signal, each at -3 dB.
 - **Vibrato mode:** **Vibrato Rate** (about 3.2 to 11.6 Hz) and **Vibrato Depth** are active, and Chorus Intensity does nothing. The LFO is sine-like. The dry signal is muted, so you hear a true pitch vibrato.
 
 Other parts of the model:
@@ -222,12 +222,13 @@ With the default Vibrato settings, the pitch swing is roughly +/-40 cents at max
 | LFO Drift (%) | 0 to 100 | Slow random wander of the LFO rate. 100% is about +/-5% |
 | Min Delay (ms) | 1 to 6 | Shortest delay, where the sweep starts. Used by both modes |
 | Chorus Sweep Max (ms) | 3 to 9 | Longest delay reached in Chorus mode |
+| Chorus LFO Shape | 0 to 100 | Chorus mode only. Blends the LFO from a triangle (0) to a sine (100). Higher values soften the pitch changes at the ends of the sweep. Vibrato mode always uses a sine |
 | Vibrato Sweep Max @ Depth 0 (ms) | 3 to 9 | Longest delay reached in Vibrato mode with Vibrato Depth at 0 |
 | Vibrato Sweep Max @ Depth 10 (ms) | 3 to 9 | Longest delay reached in Vibrato mode with Vibrato Depth at 10. Raise it for a wilder vibrato |
 | Vibrato Rate Min (Hz) | 0.5 to 20 | LFO rate with Vibrato Rate at 0 |
 | Vibrato Rate Max (Hz) | 1 to 30 | LFO rate with Vibrato Rate at 10 |
 
-The sliders appear in four groups in this order: main controls (Mode to Vibrato Depth), input and output (Input Sensitivity to Output), sound character (BBD Bandwidth to LFO Drift), and advanced tuning (Min Delay to Vibrato Rate Max). Reordering them changes how saved presets and automation map to the controls.
+The sliders appear in four groups in this order: main controls (Mode to Vibrato Depth), input and output (Input Sensitivity to Output), sound character (BBD Bandwidth to LFO Drift), and advanced tuning (Min Delay to Vibrato Rate Max, including Chorus LFO Shape). Reordering them changes how saved presets and automation map to the controls.
 
 ### Defaults
 
@@ -239,13 +240,14 @@ The sliders appear in four groups in this order: main controls (Mode to Vibrato 
 | Vibrato Depth | 5 |
 | Input Sensitivity | 80 mV |
 | Level | 7 |
-| Output Mode | Mono Mix |
+| Output Mode | Classic Stereo |
 | Output (dB) | 0 |
 | BBD Bandwidth (kHz) | 9 |
 | BBD Noise (%) | 0 |
 | LFO Drift (%) | 25 |
 | Min Delay (ms) | 3 |
 | Chorus Sweep Max (ms) | 5 |
+| Chorus LFO Shape | 50 |
 | Vibrato Sweep Max @ Depth 0 (ms) | 3.3 |
 | Vibrato Sweep Max @ Depth 10 (ms) | 4.5 |
 | Vibrato Rate Min (Hz) | 3.2 |
