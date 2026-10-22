@@ -5,7 +5,8 @@ tags: chorus vibrato modulation BBD
 //
 // Control behaviour follows the real unit:
 //   CHORUS mode  : only "Chorus Intensity" is active. It sets the LFO RATE
-//                  (~1 .. 3 Hz). Delay sweep is fixed. Triangle LFO.
+//                  (~1 .. 3 Hz). Delay sweep is fixed. Triangle LFO, which
+//                  can be rounded toward a sine with "Chorus LFO Shape".
 //                  Output = direct + delay.
 //   VIBRATO mode : "Vibrato Rate" (~3.2 .. 11.6 Hz) and "Vibrato Depth".
 //                  Sine-ish LFO. Output = delay only (true pitch vibrato).
@@ -28,7 +29,7 @@ slider4:vib_depth_k=5<0,10,0.01>Vibrato Depth
 // ---------- Input / output ----------
 slider5:sens_sw=0<0,1,1{80 mV (Instrument),10 mV (Mic)}>Input Sensitivity
 slider6:level_k=7<0,10,0.01>Level
-slider7:out_mode=0<0,2,1{Mono Mix,Classic Stereo (L Direct / R Effect),Dual (2x CE-1)}>Output Mode
+slider7:out_mode=1<0,2,1{Mono Mix,Classic Stereo (L Direct / R Effect),Dual (2x CE-1)}>Output Mode
 slider8:out_db=0<-24,12,0.1>Output (dB)
 
 // ---------- Sound character ----------
@@ -39,10 +40,11 @@ slider11:lfo_drift=25<0,100,1>LFO Drift (%)
 // ---------- Advanced tuning (defaults are gentler than the one measurement found) ----------
 slider12:min_dly=3<1,6,0.05>Min Delay (ms)
 slider13:ch_sweep=5<3,9,0.05>Chorus Sweep Max (ms)
-slider14:vs_min=3.3<3,9,0.05>Vibrato Sweep Max @ Depth 0 (ms)
-slider15:vs_max=4.5<3,9,0.05>Vibrato Sweep Max @ Depth 10 (ms)
-slider16:vr_min=3.2<0.5,20,0.1>Vibrato Rate Min (Hz)
-slider17:vr_max=11.6<1,30,0.1>Vibrato Rate Max (Hz)
+slider14:ch_shape=50<0,100,1>Chorus LFO Shape (0 = triangle, 100 = sine)
+slider15:vs_min=3.3<3,9,0.05>Vibrato Sweep Max @ Depth 0 (ms)
+slider16:vs_max=4.5<3,9,0.05>Vibrato Sweep Max @ Depth 10 (ms)
+slider17:vr_min=3.2<0.5,20,0.1>Vibrato Rate Min (Hz)
+slider18:vr_max=11.6<1,30,0.1>Vibrato Rate Max (Hz)
 
 in_pin:Left
 in_pin:Right
@@ -110,7 +112,7 @@ t_dmax = vib ? (vs_min + (vs_max - vs_min) * (vib_depth_k / 10)) * 0.001
              : ch_sweep * 0.001;
 t_dmax = max(t_dmax, t_dmin + 0.0002);
 
-t_shape = vib;                                // 0 = triangle, 1 = sine
+t_shape = vib ? 1 : ch_shape / 100;           // 0 = triangle, 1 = sine
 t_dry   = vib ? 0 : 0.707;                    // mono-mix gains
 t_wet   = vib ? 1 : 0.707;
 
