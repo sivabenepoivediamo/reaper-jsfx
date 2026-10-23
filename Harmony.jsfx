@@ -1,0 +1,1716 @@
+desc:Harmony (scale/chord MIDI processor)
+author:Davide Fumai
+version:1.0
+tags:MIDI chord scale harmony processor
+
+in_pin:none
+out_pin:none
+options:no_meter
+
+slider1:sc_src=0<0,4,1{Library,Euclidean,Clough-Douthett,Deep,Custom}>-Scale: Source
+slider2:sc_cat=0<0,8,1{Major and minor,European,Asian,Indian,Pentatonic,Modal,Jazz,Symmetric,Misc}>-Scale: Library Category
+slider3:sc_idx=0<0,159,1>-Scale: Library Index
+slider4:gen_ev=7<1,12,1>-Scale: Generator Events
+slider5:gen_mult=7<1,23,1>-Scale: Generator Multiplicity
+
+slider6:tx_root=0<0,11,1{C,C#,D,D#,E,F,F#,G,G#,A,A#,B}>-Scale TX: Root
+slider7:tx_mode=0<0,11,1>-Scale TX: Mode
+slider8:tx_deg=0<-12,12,1>-Scale TX: Degree
+slider9:tx_inv=0<0,1,1{Off,On}>-Scale TX: Invert
+slider10:tx_inv_ax=0<-12,12,1>-Scale TX: Invert Axis
+slider11:tx_mir=0<0,1,1{Off,On}>-Scale TX: Mirror
+slider12:tx_neg=0<0,1,1{Off,On}>-Scale TX: Negative
+
+slider13:ch_oct=4<0,9,1>-Chord: Octave
+slider14:cr_type=0<0,1,1{Position,Interval}>-Chord: Criterion Type
+slider15:ch_shift=0<-72,80,1>-Chord: Degree
+slider16:ch_rot=0<-12,12,1>-Chord: Rotation
+slider17:ch_voices=0<0,32,1>-Chord: Voices
+
+slider18:cx_pos=0<-12,12,1>-Chord TX: Position
+slider19:cx_off=0<-24,24,1>-Chord TX: Offset
+slider20:cx_mode=0<0,11,1>-Chord TX: Mode
+slider21:cx_inv=0<0,1,1{Off,On}>-Chord TX: Invert
+slider22:cx_inv_ax=0<-12,12,1>-Chord TX: Invert Axis
+slider23:cx_mir=0<0,1,1{Off,On}>-Chord TX: Mirror
+slider24:cx_neg=0<0,1,1{Off,On}>-Chord TX: Negative
+slider25:cx_close=0<0,1,1{Off,On}>-Chord TX: Close
+slider26:cx_spread=0<0,1,1{Off,On}>-Chord TX: Spread
+slider27:cx_topcl=0<0,1,1{Off,On}>-Chord TX: Spread Top Cluster
+slider28:cx_resize=0<0,1,1{Off,On}>-Chord TX: Resize
+slider29:cx_rs0=0<-24,24,1>-Chord TX: Resize Start
+slider30:cx_rs1=3<-24,24,1>-Chord TX: Resize End
+slider31:cx_vl=0<0,1,1{Off,On}>-Chord TX: Auto-voicing
+
+slider32:in_mode=0<0,3,1{Root,Degree,Direct,Auto}>-Input: Mode
+slider33:auto_sub=0<0,1,1{Modal Interchange,Modulation}>-Input: Auto Sub-mode
+slider34:auto_ref=1<0,1,1{Original,Current}>-Input: Auto Distance From
+slider35:auto_rst=0<0,1,1{Off,On}>-Input: Auto Autoreset
+slider36:out_ch=0<0,16,1{Same as input,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}>-Output Channel
+slider37:act=0<0,2,1{-,Reset Auto,Reset Voice-Leading}>-Action
+slider38:common_mode=0<0,1,1{Hold,Retrigger}>-Input: Common Notes
+
+@init
+ext_noinit = 1;
+NSL = 38;
+NONE = -99999;
+DEG_MIN = -72; DEG_MAX = 80;   // chord degree range: covers every MIDI note 0..127 in Degree mode
+S_SRC = 1; S_ROOT = 6; S_MODE = 7; S_SHIFT = 15; S_INMODE = 32; S_SUB = 33; S_ACT = 37;
+
+// ---------------- memory map ----------------
+M_LIB = 0;      // 402 scale masks
+M_CATS = 512;   // category start index (9)
+M_CATN = 528;   // category scale count (9)
+A_BP = 1024;    // base positions from the chosen scale source
+A_SC = 1280;    // live scale
+A_BASE = 1536;  // Auto/Interchange baseline scale (mode pinned)
+A_PRE = 1792;   // scale before Auto/Modulation transposition
+A_EFF = 2048;   // scale used for chord selection (negated if Chord Negative)
+A_CRIT = 2304;  // chord criterion
+A_CH = 2560;    // chord (step space)
+A_TMP = 2816;   // scratch, low-level ops only
+A_TMP2 = 3072;
+A_TIV = 3328;
+A_TIV2 = 3584;
+A_VL = 3840;    // voice-leading memory
+A_SND = 4096;   // currently sounding output notes
+A_STK = 4352;   // input stack ids (oldest -> newest)
+A_STKV = 4608;  // velocities
+A_STKC = 4864;  // channels
+A_NDEG = 5120;  // note -> degree id (Degree mode)
+A_CHM = 5376;   // chord as MIDI notes
+A_SPR = 6144;   // spread workspace
+SP_CAND = A_SPR; SP_IDX = A_SPR + 256; SP_USED = A_SPR + 512; SP_CNT = A_SPR + 528;
+SP_PTR = A_SPR + 544; SP_RES = A_SPR + 560; SP_PC = A_SPR + 576;
+A_ELQ = 10240; A_ELR = 10256; A_ELK = 10272; A_EB1 = 10496; A_EB2 = 10752;
+SH = 12000;     // slider shadow (1..NSL)
+A_CRP = 13000;  // position criterion: list of integers (max 64)
+A_CRI = 13100;  // interval criterion: list of integers (max 64)
+A_SCP = 13200;  // custom scale: list of positions (max 64)
+A_FLT = 13400;  // GUI: filtered scale list (512)
+G_TMP = 14000;  // GUI scratch (never used by the audio thread)
+LIST_MAX = 64;
+// polyphonic voices: one per held input key (0..127)
+V_ACT = 20000;   // voice active flag
+V_CNT = 20256;   // number of chord notes in the voice
+V_CH = 20512;    // output channel the voice was sent on
+V_NOTES = 21000; // 128 * 64 chord notes
+O_REF = 30000;   // 16 * 128 owner counts per (channel, note)
+crp_n = 3; A_CRP[0] = 0; A_CRP[1] = 2; A_CRP[2] = 4;
+cri_n = 1; A_CRI[0] = 2;
+scp_n = 7; A_SCP[0] = 0; A_SCP[1] = 2; A_SCP[2] = 4; A_SCP[3] = 5; A_SCP[4] = 7; A_SCP[5] = 9; A_SCP[6] = 11;
+lists_ver = 0; lists_ver_sh = -1;
+
+i = 0; loop(NSL + 2, SH[i] = -1000000000; i += 1;);
+i = 0; loop(128, A_NDEG[i] = NONE; V_ACT[i] = 0; V_CNT[i] = 0; i += 1;);
+i = 0; loop(2048, O_REF[i] = 0; i += 1;);
+
+stk_n = 0; snd_n = 0; snd_ch = 0; vl_n = 0;
+sc_n = 0; bn = 0; cm_n = 0; ch_cnt = 0;
+auto_mod_t = -1; auto_base_rot = 0; auto_base_shift = 0; last_N = -1;
+root_oct_off = 0;   // Root mode: octave shift (in semitones) of the chord, follows the octave of the played key
+prev_mode = -1;
+last_cap = 0; dirty = 0;
+disp_err = 0;
+
+// Scale library: scales and names from Francesco Balena, "The Scale Omnibus"
+NLIB=402;
+M_LIB[0]=2741; M_LIB[1]=1709; M_LIB[2]=1451; M_LIB[3]=2773; M_LIB[4]=1717; M_LIB[5]=1453; M_LIB[6]=1387; M_LIB[7]=2733; M_LIB[8]=1707; M_LIB[9]=2901; M_LIB[10]=1749; M_LIB[11]=1461;
+M_LIB[12]=1389; M_LIB[13]=1371; M_LIB[14]=2477; M_LIB[15]=1643; M_LIB[16]=2869; M_LIB[17]=1741; M_LIB[18]=1459; M_LIB[19]=2777; M_LIB[20]=859; M_LIB[21]=1711; M_LIB[22]=3411; M_LIB[23]=3379;
+M_LIB[24]=3403; M_LIB[25]=3443; M_LIB[26]=1467; M_LIB[27]=1485; M_LIB[28]=947; M_LIB[29]=2739; M_LIB[30]=2509; M_LIB[31]=1891; M_LIB[32]=1981; M_LIB[33]=2745; M_LIB[34]=1753; M_LIB[35]=877;
+M_LIB[36]=2511; M_LIB[37]=219; M_LIB[38]=2669; M_LIB[39]=2029; M_LIB[40]=2907; M_LIB[41]=3515; M_LIB[42]=2731; M_LIB[43]=2715; M_LIB[44]=2667; M_LIB[45]=2475; M_LIB[46]=2479; M_LIB[47]=3531;
+M_LIB[48]=3435; M_LIB[49]=1621; M_LIB[50]=1619; M_LIB[51]=1747; M_LIB[52]=1437; M_LIB[53]=2461; M_LIB[54]=693; M_LIB[55]=2489; M_LIB[56]=2779; M_LIB[57]=1401; M_LIB[58]=1403; M_LIB[59]=1131;
+M_LIB[60]=2805; M_LIB[61]=1443; M_LIB[62]=1659; M_LIB[63]=3507; M_LIB[64]=3069; M_LIB[65]=2043; M_LIB[66]=173; M_LIB[67]=2981; M_LIB[68]=2917; M_LIB[69]=1651; M_LIB[70]=3699; M_LIB[71]=2517;
+M_LIB[72]=2419; M_LIB[73]=1323; M_LIB[74]=685; M_LIB[75]=1115; M_LIB[76]=2381; M_LIB[77]=1357; M_LIB[78]=1783; M_LIB[79]=1483; M_LIB[80]=1209; M_LIB[81]=979; M_LIB[82]=2521; M_LIB[83]=3275;
+M_LIB[84]=2471; M_LIB[85]=971; M_LIB[86]=3763; M_LIB[87]=3251; M_LIB[88]=2791; M_LIB[89]=3303; M_LIB[90]=941; M_LIB[91]=1497; M_LIB[92]=981; M_LIB[93]=2727; M_LIB[94]=3253; M_LIB[95]=1491;
+M_LIB[96]=1735; M_LIB[97]=3277; M_LIB[98]=2759; M_LIB[99]=1465; M_LIB[100]=3271; M_LIB[101]=1447; M_LIB[102]=3243; M_LIB[103]=967; M_LIB[104]=973; M_LIB[105]=2763; M_LIB[106]=3239; M_LIB[107]=1703;
+M_LIB[108]=3245; M_LIB[109]=3283; M_LIB[110]=953; M_LIB[111]=557; M_LIB[112]=725; M_LIB[113]=2253; M_LIB[114]=301; M_LIB[115]=2803; M_LIB[116]=2469; M_LIB[117]=3237; M_LIB[118]=403; M_LIB[119]=2451;
+M_LIB[120]=181; M_LIB[121]=711; M_LIB[122]=1577; M_LIB[123]=2345; M_LIB[124]=2601; M_LIB[125]=331; M_LIB[126]=1997; M_LIB[127]=2435; M_LIB[128]=2465; M_LIB[129]=467; M_LIB[130]=721; M_LIB[131]=245;
+M_LIB[132]=2259; M_LIB[133]=1195; M_LIB[134]=2417; M_LIB[135]=1203; M_LIB[136]=3273; M_LIB[137]=2349; M_LIB[138]=1229; M_LIB[139]=2211; M_LIB[140]=2227; M_LIB[141]=1355; M_LIB[142]=2189; M_LIB[143]=2643;
+M_LIB[144]=2613; M_LIB[145]=2737; M_LIB[146]=851; M_LIB[147]=1477; M_LIB[148]=2723; M_LIB[149]=1489; M_LIB[150]=915; M_LIB[151]=909; M_LIB[152]=691; M_LIB[153]=1733; M_LIB[154]=1419; M_LIB[155]=2225;
+M_LIB[156]=2229; M_LIB[157]=3761; M_LIB[158]=1717; M_LIB[159]=2339; M_LIB[160]=2311; M_LIB[161]=2133; M_LIB[162]=1697; M_LIB[163]=2355; M_LIB[164]=1331; M_LIB[165]=2453; M_LIB[166]=1737; M_LIB[167]=3269;
+M_LIB[168]=1683; M_LIB[169]=419; M_LIB[170]=435; M_LIB[171]=3369; M_LIB[172]=939; M_LIB[173]=1171; M_LIB[174]=1677; M_LIB[175]=1705; M_LIB[176]=2771; M_LIB[177]=1669; M_LIB[178]=2099; M_LIB[179]=3757;
+M_LIB[180]=665; M_LIB[181]=2645; M_LIB[182]=2853; M_LIB[183]=199; M_LIB[184]=2725; M_LIB[185]=3257; M_LIB[186]=2217; M_LIB[187]=1589; M_LIB[188]=1445; M_LIB[189]=2581; M_LIB[190]=2757; M_LIB[191]=2467;
+M_LIB[192]=4021; M_LIB[193]=2481; M_LIB[194]=2483; M_LIB[195]=2341; M_LIB[196]=2721; M_LIB[197]=775; M_LIB[198]=3637; M_LIB[199]=2547; M_LIB[200]=2637; M_LIB[201]=2917; M_LIB[202]=1699; M_LIB[203]=2597;
+M_LIB[204]=2261; M_LIB[205]=1587; M_LIB[206]=1163; M_LIB[207]=1675; M_LIB[208]=1225; M_LIB[209]=985; M_LIB[210]=2357; M_LIB[211]=1733; M_LIB[212]=945; M_LIB[213]=451; M_LIB[214]=2995; M_LIB[215]=1581;
+M_LIB[216]=709; M_LIB[217]=1605; M_LIB[218]=2221; M_LIB[219]=3519; M_LIB[220]=1205; M_LIB[221]=3749; M_LIB[222]=807; M_LIB[223]=427; M_LIB[224]=461; M_LIB[225]=2473; M_LIB[226]=3249; M_LIB[227]=1421;
+M_LIB[228]=1681; M_LIB[229]=2609; M_LIB[230]=2611; M_LIB[231]=1713; M_LIB[232]=1715; M_LIB[233]=717; M_LIB[234]=2247; M_LIB[235]=3281; M_LIB[236]=2347; M_LIB[237]=1745; M_LIB[238]=1745; M_LIB[239]=661;
+M_LIB[240]=1189; M_LIB[241]=1321; M_LIB[242]=677; M_LIB[243]=1193; M_LIB[244]=653; M_LIB[245]=1187; M_LIB[246]=2641; M_LIB[247]=421; M_LIB[248]=1129; M_LIB[249]=2225; M_LIB[250]=395; M_LIB[251]=2245;
+M_LIB[252]=1585; M_LIB[253]=1173; M_LIB[254]=1317; M_LIB[255]=1353; M_LIB[256]=681; M_LIB[257]=597; M_LIB[258]=419; M_LIB[259]=2257; M_LIB[260]=397; M_LIB[261]=1123; M_LIB[262]=659; M_LIB[263]=595;
+M_LIB[264]=587; M_LIB[265]=405; M_LIB[266]=1177; M_LIB[267]=1201; M_LIB[268]=2213; M_LIB[269]=675; M_LIB[270]=1113; M_LIB[271]=1361; M_LIB[272]=313; M_LIB[273]=689; M_LIB[274]=299; M_LIB[275]=2197;
+M_LIB[276]=1573; M_LIB[277]=1417; M_LIB[278]=1165; M_LIB[279]=2705; M_LIB[280]=425; M_LIB[281]=2353; M_LIB[282]=307; M_LIB[283]=2677; M_LIB[284]=2869; M_LIB[285]=2873; M_LIB[286]=2867; M_LIB[287]=1197;
+M_LIB[288]=1397; M_LIB[289]=2861; M_LIB[290]=4013; M_LIB[291]=1965; M_LIB[292]=1691; M_LIB[293]=2651; M_LIB[294]=1739; M_LIB[295]=1449; M_LIB[296]=1455; M_LIB[297]=1435; M_LIB[298]=2459; M_LIB[299]=619;
+M_LIB[300]=923; M_LIB[301]=2709; M_LIB[302]=2713; M_LIB[303]=3289; M_LIB[304]=1493; M_LIB[305]=3829; M_LIB[306]=2765; M_LIB[307]=3285; M_LIB[308]=1877; M_LIB[309]=1701; M_LIB[310]=1653; M_LIB[311]=1845;
+M_LIB[312]=1843; M_LIB[313]=2905; M_LIB[314]=1395; M_LIB[315]=875; M_LIB[316]=871; M_LIB[317]=2411; M_LIB[318]=1373; M_LIB[319]=1367; M_LIB[320]=2395; M_LIB[321]=731; M_LIB[322]=1627; M_LIB[323]=855;
+M_LIB[324]=2485; M_LIB[325]=2869; M_LIB[326]=2413; M_LIB[327]=1715; M_LIB[328]=2483; M_LIB[329]=935; M_LIB[330]=3257; M_LIB[331]=1967; M_LIB[332]=3385; M_LIB[333]=919; M_LIB[334]=2675; M_LIB[335]=2507;
+M_LIB[336]=1255; M_LIB[337]=1239; M_LIB[338]=3301; M_LIB[339]=925; M_LIB[340]=1849; M_LIB[341]=2515; M_LIB[342]=743; M_LIB[343]=2999; M_LIB[344]=4029; M_LIB[345]=3837; M_LIB[346]=3413; M_LIB[347]=1257;
+M_LIB[348]=1645; M_LIB[349]=1769; M_LIB[350]=1773; M_LIB[351]=3773; M_LIB[352]=1789; M_LIB[353]=667; M_LIB[354]=1259; M_LIB[355]=2281; M_LIB[356]=1261; M_LIB[357]=3305; M_LIB[358]=1721; M_LIB[359]=3765;
+M_LIB[360]=2997; M_LIB[361]=917; M_LIB[362]=949; M_LIB[363]=1693; M_LIB[364]=1725; M_LIB[365]=2989; M_LIB[366]=3501; M_LIB[367]=2539; M_LIB[368]=1515; M_LIB[369]=3767; M_LIB[370]=1365; M_LIB[371]=2457;
+M_LIB[372]=819; M_LIB[373]=2925; M_LIB[374]=1755; M_LIB[375]=4095; M_LIB[376]=1235; M_LIB[377]=845; M_LIB[378]=715; M_LIB[379]=3549; M_LIB[380]=2535; M_LIB[381]=3705; M_LIB[382]=2275; M_LIB[383]=3185;
+M_LIB[384]=3445; M_LIB[385]=1495; M_LIB[386]=3055; M_LIB[387]=3965; M_LIB[388]=3003; M_LIB[389]=455; M_LIB[390]=3575; M_LIB[391]=2795; M_LIB[392]=2541; M_LIB[393]=2509; M_LIB[394]=853; M_LIB[395]=2389;
+M_LIB[396]=3499; M_LIB[397]=2701; M_LIB[398]=1723; M_LIB[399]=621; M_LIB[400]=1787; M_LIB[401]=3543;
+M_CATS[0]=0; M_CATN[0]=21;
+M_CATS[1]=21; M_CATN[1]=38;
+M_CATS[2]=59; M_CATN[2]=20;
+M_CATS[3]=79; M_CATN[3]=160;
+M_CATS[4]=239; M_CATN[4]=44;
+M_CATS[5]=283; M_CATN[5]=64;
+M_CATS[6]=347; M_CATN[6]=23;
+M_CATS[7]=370; M_CATN[7]=22;
+M_CATS[8]=392; M_CATN[8]=10;
+function lib_name(i, dest) (
+  i==0 ? strcpy(dest,"Ionian (Major)");
+  i==1 ? strcpy(dest,"Dorian");
+  i==2 ? strcpy(dest,"Phrygian");
+  i==3 ? strcpy(dest,"Lydian");
+  i==4 ? strcpy(dest,"Mixolydian");
+  i==5 ? strcpy(dest,"Aeolian (Natural Minor)");
+  i==6 ? strcpy(dest,"Locrian");
+  i==7 ? strcpy(dest,"Melodic Minor");
+  i==8 ? strcpy(dest,"Dorian b2");
+  i==9 ? strcpy(dest,"Lydian Augmented");
+  i==10 ? strcpy(dest,"Lydian Dominant");
+  i==11 ? strcpy(dest,"Melodic Major");
+  i==12 ? strcpy(dest,"Half Diminished");
+  i==13 ? strcpy(dest,"Altered Dominant");
+  i==14 ? strcpy(dest,"Harmonic Minor");
+  i==15 ? strcpy(dest,"Locrian #6");
+  i==16 ? strcpy(dest,"Ionian Augmented");
+  i==17 ? strcpy(dest,"Romanian Minor");
+  i==18 ? strcpy(dest,"Phrygian Dominant");
+  i==19 ? strcpy(dest,"Lydian #2");
+  i==20 ? strcpy(dest,"Ultralocrian");
+  i==21 ? strcpy(dest,"Adonai Malakh");
+  i==22 ? strcpy(dest,"Enigmatic (asc)");
+  i==23 ? strcpy(dest,"Enigmatic (desc)");
+  i==24 ? strcpy(dest,"Enigmatic Minor");
+  i==25 ? strcpy(dest,"Enigmatic Mixed");
+  i==26 ? strcpy(dest,"Flamenco");
+  i==27 ? strcpy(dest,"Gypsy");
+  i==28 ? strcpy(dest,"Gypsy Hexatonic");
+  i==29 ? strcpy(dest,"Gypsy Inverse");
+  i==30 ? strcpy(dest,"Gypsy Minor");
+  i==31 ? strcpy(dest,"Hijaz Major");
+  i==32 ? strcpy(dest,"Houseini");
+  i==33 ? strcpy(dest,"Houzam");
+  i==34 ? strcpy(dest,"Hungarian Major");
+  i==35 ? strcpy(dest,"Hungarian Major Inverse");
+  i==36 ? strcpy(dest,"Hungarian Minor b2");
+  i==37 ? strcpy(dest,"Istrian");
+  i==38 ? strcpy(dest,"Jeths");
+  i==39 ? strcpy(dest,"Kiourdi");
+  i==40 ? strcpy(dest,"Magen Abot");
+  i==41 ? strcpy(dest,"Moorish Phrygian");
+  i==42 ? strcpy(dest,"Neapolitan Major");
+  i==43 ? strcpy(dest,"Neapolitan Major b4");
+  i==44 ? strcpy(dest,"Neapolitan Major b5");
+  i==45 ? strcpy(dest,"Neapolitan Minor");
+  i==46 ? strcpy(dest,"Harmonic Neapolitan Minor");
+  i==47 ? strcpy(dest,"Neseveri");
+  i==48 ? strcpy(dest,"Prokofiev");
+  i==49 ? strcpy(dest,"Prometheus");
+  i==50 ? strcpy(dest,"Prometheus Neapolitan");
+  i==51 ? strcpy(dest,"Romanian Major");
+  i==52 ? strcpy(dest,"Sabach");
+  i==53 ? strcpy(dest,"Sabach Maj7");
+  i==54 ? strcpy(dest,"Scottish Hexatonic");
+  i==55 ? strcpy(dest,"Sengiach");
+  i==56 ? strcpy(dest,"Shostakovich");
+  i==57 ? strcpy(dest,"Spanish Heptatonic");
+  i==58 ? strcpy(dest,"Spanish Octatonic");
+  i==59 ? strcpy(dest,"Honkoshi");
+  i==60 ? strcpy(dest,"Ichilkotsucho");
+  i==61 ? strcpy(dest,"Insen");
+  i==62 ? strcpy(dest,"Maqam Shadd'araban");
+  i==63 ? strcpy(dest,"Maqam Hijaz");
+  i==64 ? strcpy(dest,"Maqam Shawq Afza");
+  i==65 ? strcpy(dest,"Maqam Tarzanuyn");
+  i==66 ? strcpy(dest,"Nando-Kyemyonjo");
+  i==67 ? strcpy(dest,"Noh");
+  i==68 ? strcpy(dest,"Nohkan");
+  i==69 ? strcpy(dest,"Oriental");
+  i==70 ? strcpy(dest,"Oriental 2");
+  i==71 ? strcpy(dest,"Pelog");
+  i==72 ? strcpy(dest,"Persian");
+  i==73 ? strcpy(dest,"Ritzu");
+  i==74 ? strcpy(dest,"Sho");
+  i==75 ? strcpy(dest,"Sho #2");
+  i==76 ? strcpy(dest,"Takemitzu Tree 1");
+  i==77 ? strcpy(dest,"Takemitzu Tree 2");
+  i==78 ? strcpy(dest,"Youlan");
+  i==79 ? strcpy(dest,"Mela Bhavapriya");
+  i==80 ? strcpy(dest,"Mela Calanata");
+  i==81 ? strcpy(dest,"Mela Dhavalambari");
+  i==82 ? strcpy(dest,"Mela Dhatuvardhani");
+  i==83 ? strcpy(dest,"Mela Divyamani");
+  i==84 ? strcpy(dest,"Mela Ganamurti");
+  i==85 ? strcpy(dest,"Mela Gavambodhi");
+  i==86 ? strcpy(dest,"Mela Gayakapriya");
+  i==87 ? strcpy(dest,"Mela Hatakambari");
+  i==88 ? strcpy(dest,"Mela Jalarnava");
+  i==89 ? strcpy(dest,"Mela Jhalavarli");
+  i==90 ? strcpy(dest,"Mela Jhankaradhvani");
+  i==91 ? strcpy(dest,"Mela Jyotisvarupini");
+  i==92 ? strcpy(dest,"Mela Kantamani");
+  i==93 ? strcpy(dest,"Mela Manavati");
+  i==94 ? strcpy(dest,"Mela Naganandini");
+  i==95 ? strcpy(dest,"Mela Namanarayani");
+  i==96 ? strcpy(dest,"Mela Navanitam");
+  i==97 ? strcpy(dest,"Mela Nitimati");
+  i==98 ? strcpy(dest,"Mela Pavani");
+  i==99 ? strcpy(dest,"Mela Ragavardhani");
+  i==100 ? strcpy(dest,"Mela Raghupriya");
+  i==101 ? strcpy(dest,"Mela Ratnangi");
+  i==102 ? strcpy(dest,"Mela Rupavati");
+  i==103 ? strcpy(dest,"Mela Salaga");
+  i==104 ? strcpy(dest,"Mela Syamalangi");
+  i==105 ? strcpy(dest,"Mela Suvarnangi");
+  i==106 ? strcpy(dest,"Mela Tenarupi");
+  i==107 ? strcpy(dest,"Mela Venaspati");
+  i==108 ? strcpy(dest,"Mela Varunapriya");
+  i==109 ? strcpy(dest,"Mela Visvambhari");
+  i==110 ? strcpy(dest,"Mela Yagapriya");
+  i==111 ? strcpy(dest,"Raga Abhogi");
+  i==112 ? strcpy(dest,"Raga Aivarati");
+  i==113 ? strcpy(dest,"Raga Amarasenapriya");
+  i==114 ? strcpy(dest,"Raga Audav Tukhari");
+  i==115 ? strcpy(dest,"Raga Bhatiyar");
+  i==116 ? strcpy(dest,"Raga Bhinna Pancama");
+  i==117 ? strcpy(dest,"Raga Brindabani");
+  i==118 ? strcpy(dest,"Raga Bowli (asc)");
+  i==119 ? strcpy(dest,"Raga Bowli (desc)");
+  i==120 ? strcpy(dest,"Raga Budhamanohari");
+  i==121 ? strcpy(dest,"Raga Chandrajyoti");
+  i==122 ? strcpy(dest,"Raga Chandrakauns Kafi");
+  i==123 ? strcpy(dest,"Raga Chandrakauns Kiravani");
+  i==124 ? strcpy(dest,"Raga Chandrakauns Modern");
+  i==125 ? strcpy(dest,"Raga Chaya Todi");
+  i==126 ? strcpy(dest,"Raga Chinthamani");
+  i==127 ? strcpy(dest,"Raga Deshgaur");
+  i==128 ? strcpy(dest,"Raga Devaranjani");
+  i==129 ? strcpy(dest,"Raga Dhavalangam");
+  i==130 ? strcpy(dest,"Raga Dhavalashri");
+  i==131 ? strcpy(dest,"Raga Dipak");
+  i==132 ? strcpy(dest,"Raga Gamakakriya");
+  i==133 ? strcpy(dest,"Raga Gandharavam");
+  i==134 ? strcpy(dest,"Raga Gangatarangini");
+  i==135 ? strcpy(dest,"Raga Gaula");
+  i==136 ? strcpy(dest,"Raga Gaurikriya");
+  i==137 ? strcpy(dest,"Raga Ghantana");
+  i==138 ? strcpy(dest,"Raga Gopikatilaka");
+  i==139 ? strcpy(dest,"Raga Gowla (asc)");
+  i==140 ? strcpy(dest,"Raga Gowla (desc)");
+  i==141 ? strcpy(dest,"Raga Gurjari Todi");
+  i==142 ? strcpy(dest,"Raga Hamsadhvani");
+  i==143 ? strcpy(dest,"Raga Hansanandi");
+  i==144 ? strcpy(dest,"Raga Hamsa Vinodini");
+  i==145 ? strcpy(dest,"Raga Hari Nata");
+  i==146 ? strcpy(dest,"Raga Hejjajji");
+  i==147 ? strcpy(dest,"Raga Jaganmohanam");
+  i==148 ? strcpy(dest,"Raga Jivantika");
+  i==149 ? strcpy(dest,"Raga Jyoty");
+  i==150 ? strcpy(dest,"Raga Kalagada");
+  i==151 ? strcpy(dest,"Raga Kalakanthi");
+  i==152 ? strcpy(dest,"Raga Kalavati");
+  i==153 ? strcpy(dest,"Raga Kamalamanohari");
+  i==154 ? strcpy(dest,"Raga Kashyapi");
+  i==155 ? strcpy(dest,"Raga Kedaram (asc)");
+  i==156 ? strcpy(dest,"Raga Kedaram (desc)");
+  i==157 ? strcpy(dest,"Raga Khamach (asc)");
+  i==158 ? strcpy(dest,"Raga Khamach (desc)");
+  i==159 ? strcpy(dest,"Raga Kshanika");
+  i==160 ? strcpy(dest,"Raga Kumarapriya");
+  i==161 ? strcpy(dest,"Raga Kumurdaki");
+  i==162 ? strcpy(dest,"Raga Kuntvarali");
+  i==163 ? strcpy(dest,"Raga Lalita");
+  i==164 ? strcpy(dest,"Raga Lalita Bhairav");
+  i==165 ? strcpy(dest,"Raga Latika");
+  i==166 ? strcpy(dest,"Raga Madhukauns");
+  i==167 ? strcpy(dest,"Raga Malarani");
+  i==168 ? strcpy(dest,"Raga Malayamarutam");
+  i==169 ? strcpy(dest,"Raga Malahari (asc)");
+  i==170 ? strcpy(dest,"Raga Malahari (desc)");
+  i==171 ? strcpy(dest,"Raga Malkauns");
+  i==172 ? strcpy(dest,"Raga Malini");
+  i==173 ? strcpy(dest,"Raga Manaranjani");
+  i==174 ? strcpy(dest,"Raga Manavi");
+  i==175 ? strcpy(dest,"Raga Manohari");
+  i==176 ? strcpy(dest,"Raga Marwa Thaat");
+  i==177 ? strcpy(dest,"Raga Matha Kokila");
+  i==178 ? strcpy(dest,"Raga Megharamji");
+  i==179 ? strcpy(dest,"Raga Miam Ki Malhar");
+  i==180 ? strcpy(dest,"Raga Mohanangi");
+  i==181 ? strcpy(dest,"Raga Mruganandana");
+  i==182 ? strcpy(dest,"Raga Multani");
+  i==183 ? strcpy(dest,"Raga Nabhomani");
+  i==184 ? strcpy(dest,"Raga Nagagandhari");
+  i==185 ? strcpy(dest,"Raga Nattai (asc)");
+  i==186 ? strcpy(dest,"Raga Nattai (desc)");
+  i==187 ? strcpy(dest,"Raga Nattaikurinji");
+  i==188 ? strcpy(dest,"Raga Navamanohari");
+  i==189 ? strcpy(dest,"Raga Neroshta");
+  i==190 ? strcpy(dest,"Raga Nishadi");
+  i==191 ? strcpy(dest,"Raga Padi");
+  i==192 ? strcpy(dest,"Raga Pahadi");
+  i==193 ? strcpy(dest,"Raga Paras (asc)");
+  i==194 ? strcpy(dest,"Raga Paras (desc)");
+  i==195 ? strcpy(dest,"Raga Priyadharshini");
+  i==196 ? strcpy(dest,"Raga Puruhutika");
+  i==197 ? strcpy(dest,"Raga Putrika");
+  i==198 ? strcpy(dest,"Raga Rageshri");
+  i==199 ? strcpy(dest,"Raga Ramkali");
+  i==200 ? strcpy(dest,"Raga Rangini");
+  i==201 ? strcpy(dest,"Raga Rasamanjari");
+  i==202 ? strcpy(dest,"Raga Rasavali");
+  i==203 ? strcpy(dest,"Raga Rasranjani");
+  i==204 ? strcpy(dest,"Raga Ratnakanthi");
+  i==205 ? strcpy(dest,"Raga Rudra Pancama");
+  i==206 ? strcpy(dest,"Raga Rukmangi");
+  i==207 ? strcpy(dest,"Raga Salagavarali");
+  i==208 ? strcpy(dest,"Raga Samudhra Priya");
+  i==209 ? strcpy(dest,"Raga Santanamanjari");
+  i==210 ? strcpy(dest,"Raga Sarasanana");
+  i==211 ? strcpy(dest,"Raga Sarasvati");
+  i==212 ? strcpy(dest,"Raga Saravati");
+  i==213 ? strcpy(dest,"Raga Saugandhini");
+  i==214 ? strcpy(dest,"Raga Saurashtra");
+  i==215 ? strcpy(dest,"Raga Shreeranjani");
+  i==216 ? strcpy(dest,"Raga Shri Kalyan");
+  i==217 ? strcpy(dest,"Raga Shubravarni");
+  i==218 ? strcpy(dest,"Raga Sindhura Kafi");
+  i==219 ? strcpy(dest,"Raga Sindhi-Bhairavi");
+  i==220 ? strcpy(dest,"Raga Siva Kambhoji");
+  i==221 ? strcpy(dest,"Raga Sorati");
+  i==222 ? strcpy(dest,"Raga Suddha Mukhari");
+  i==223 ? strcpy(dest,"Raga Suddha Simantini");
+  i==224 ? strcpy(dest,"Raga Syamalam");
+  i==225 ? strcpy(dest,"Raga Takka");
+  i==226 ? strcpy(dest,"Raga Tilang");
+  i==227 ? strcpy(dest,"Raga Trimurti");
+  i==228 ? strcpy(dest,"Raga Valaji");
+  i==229 ? strcpy(dest,"Raga Vasanta (asc)");
+  i==230 ? strcpy(dest,"Raga Vasanta (desc)");
+  i==231 ? strcpy(dest,"Raga Vegavahini (asc)");
+  i==232 ? strcpy(dest,"Raga Vegavahini (desc)");
+  i==233 ? strcpy(dest,"Raga Vijayanagari");
+  i==234 ? strcpy(dest,"Raga Vijayasri");
+  i==235 ? strcpy(dest,"Raga Vijayavasanta");
+  i==236 ? strcpy(dest,"Raga Viyogavarali");
+  i==237 ? strcpy(dest,"Raga Vutari");
+  i==238 ? strcpy(dest,"Raga Zilaf");
+  i==239 ? strcpy(dest,"Major Pentatonic");
+  i==240 ? strcpy(dest,"Suspended Pentatonic");
+  i==241 ? strcpy(dest,"Man Gong");
+  i==242 ? strcpy(dest,"Ritusen");
+  i==243 ? strcpy(dest,"Minor Pentatonic");
+  i==244 ? strcpy(dest,"Dorian Pentatonic");
+  i==245 ? strcpy(dest,"Kokin-Choshi");
+  i==246 ? strcpy(dest,"Raga Hindol");
+  i==247 ? strcpy(dest,"Han-Kumoi");
+  i==248 ? strcpy(dest,"Minor Pentatonic 7 b5");
+  i==249 ? strcpy(dest,"Ionian Pentatonic");
+  i==250 ? strcpy(dest,"Pelog Pentatonic");
+  i==251 ? strcpy(dest,"Raga Hamsanada");
+  i==252 ? strcpy(dest,"Raga Khamaji Durga");
+  i==253 ? strcpy(dest,"Dominant Pentatonic");
+  i==254 ? strcpy(dest,"Chaio");
+  i==255 ? strcpy(dest,"Chin");
+  i==256 ? strcpy(dest,"Kyemyonjo");
+  i==257 ? strcpy(dest,"Kung");
+  i==258 ? strcpy(dest,"In");
+  i==259 ? strcpy(dest,"Hirajoshi");
+  i==260 ? strcpy(dest,"Ake-Bono");
+  i==261 ? strcpy(dest,"Iwato");
+  i==262 ? strcpy(dest,"Major Pentatonic b2");
+  i==263 ? strcpy(dest,"Major Pentatonic b2 b5");
+  i==264 ? strcpy(dest,"Major Pentatonic b3");
+  i==265 ? strcpy(dest,"Major Pentatonic b6");
+  i==266 ? strcpy(dest,"Major Pentatonic b7 #9");
+  i==267 ? strcpy(dest,"Mixolydian Pentatonic");
+  i==268 ? strcpy(dest,"Tcherepnin Major Pentatonic");
+  i==269 ? strcpy(dest,"Altered Pentatonic");
+  i==270 ? strcpy(dest,"Locrian Pentatonic");
+  i==271 ? strcpy(dest,"Pentatonic Whole-Tone");
+  i==272 ? strcpy(dest,"Center-Cluster PentaMirror");
+  i==273 ? strcpy(dest,"Raga Nagaswaravali");
+  i==274 ? strcpy(dest,"Raga Chitthakarshini");
+  i==275 ? strcpy(dest,"Raga Hamsadhvani 2");
+  i==276 ? strcpy(dest,"Pyeong Jo");
+  i==277 ? strcpy(dest,"Raga Shailaja");
+  i==278 ? strcpy(dest,"Pygmy");
+  i==279 ? strcpy(dest,"Raga Mamata");
+  i==280 ? strcpy(dest,"Raga Kokil Pancham");
+  i==281 ? strcpy(dest,"Romanian Bacovia");
+  i==282 ? strcpy(dest,"Syrian Pentatonic");
+  i==283 ? strcpy(dest,"Ionian b5");
+  i==284 ? strcpy(dest,"Ionian #5");
+  i==285 ? strcpy(dest,"Ionian Augmented #2");
+  i==286 ? strcpy(dest,"Ionian Augmented b9");
+  i==287 ? strcpy(dest,"Minor Hexatonic");
+  i==288 ? strcpy(dest,"Major Locrian");
+  i==289 ? strcpy(dest,"Jazz Minor #5");
+  i==290 ? strcpy(dest,"Full Minor All Flats");
+  i==291 ? strcpy(dest,"Dorian Aeolian");
+  i==292 ? strcpy(dest,"Dorian b2 b4");
+  i==293 ? strcpy(dest,"Dorian b2 Maj7");
+  i==294 ? strcpy(dest,"Dorian b9 #11");
+  i==295 ? strcpy(dest,"Phrygian Hexatonic");
+  i==296 ? strcpy(dest,"Phrygian Aeolian b4");
+  i==297 ? strcpy(dest,"Phrygian b4");
+  i==298 ? strcpy(dest,"Phrygian b4 Maj7");
+  i==299 ? strcpy(dest,"Double Phrygian");
+  i==300 ? strcpy(dest,"Ultraphrygian");
+  i==301 ? strcpy(dest,"Lydian Hexatonic");
+  i==302 ? strcpy(dest,"Lydian #2 Hexatonic");
+  i==303 ? strcpy(dest,"Lydian #2 #6");
+  i==304 ? strcpy(dest,"Lydian Dominant b6");
+  i==305 ? strcpy(dest,"Lydian Mixolydian");
+  i==306 ? strcpy(dest,"Lydian Diminished");
+  i==307 ? strcpy(dest,"Lydian #6");
+  i==308 ? strcpy(dest,"Lydian Augmented Dominant");
+  i==309 ? strcpy(dest,"Mixolydian Hexatonic");
+  i==310 ? strcpy(dest,"Mixolydian b5");
+  i==311 ? strcpy(dest,"Mixolydian Augmented");
+  i==312 ? strcpy(dest,"Mixolydian Augmented Maj9");
+  i==313 ? strcpy(dest,"Aeolian b1");
+  i==314 ? strcpy(dest,"Locrian Dominant");
+  i==315 ? strcpy(dest,"Locrian bb7");
+  i==316 ? strcpy(dest,"Locrian bb3 bb7");
+  i==317 ? strcpy(dest,"Locrian Maj7");
+  i==318 ? strcpy(dest,"Semilocrian b4");
+  i==319 ? strcpy(dest,"Superlocrian bb3");
+  i==320 ? strcpy(dest,"Superlocrian Maj7");
+  i==321 ? strcpy(dest,"Superlocrian bb6 bb7");
+  i==322 ? strcpy(dest,"Superlocrian #6");
+  i==323 ? strcpy(dest,"Ultralocrian bb3");
+  i==324 ? strcpy(dest,"Harmonic Major");
+  i==325 ? strcpy(dest,"Harmonic Major 2");
+  i==326 ? strcpy(dest,"Harmonic Minor b5");
+  i==327 ? strcpy(dest,"Harmonic Minor Inverse");
+  i==328 ? strcpy(dest,"Double Harmonic");
+  i==329 ? strcpy(dest,"Chromatic Dorian");
+  i==330 ? strcpy(dest,"Chromatic Dorian Inverse");
+  i==331 ? strcpy(dest,"Chromatic Diatonic Dorian");
+  i==332 ? strcpy(dest,"Chromatic Phrygian");
+  i==333 ? strcpy(dest,"Chromatic Phrygian Inverse");
+  i==334 ? strcpy(dest,"Chromatic Lydian");
+  i==335 ? strcpy(dest,"Chromatic Lydian Inverse");
+  i==336 ? strcpy(dest,"Chromatic Mixolydian");
+  i==337 ? strcpy(dest,"Chromatic Mixolydian 2");
+  i==338 ? strcpy(dest,"Chromatic Mixolydian Inverse");
+  i==339 ? strcpy(dest,"Chromatic Hypodorian");
+  i==340 ? strcpy(dest,"Chromatic Hypodorian Inverse");
+  i==341 ? strcpy(dest,"Chromatic Hypolydian");
+  i==342 ? strcpy(dest,"Chromatic Hypophrygian Inverse");
+  i==343 ? strcpy(dest,"Chromatic Permutated Diatonic Dorian");
+  i==344 ? strcpy(dest,"Major Minor Mixed");
+  i==345 ? strcpy(dest,"Minor Pentatonic with Leading Tones");
+  i==346 ? strcpy(dest,"Leading Whole-Tone");
+  i==347 ? strcpy(dest,"Blues");
+  i==348 ? strcpy(dest,"Blues Heptatonic");
+  i==349 ? strcpy(dest,"Blues Heptatonic 2");
+  i==350 ? strcpy(dest,"Blues Octatonic");
+  i==351 ? strcpy(dest,"Blues Enneatonic");
+  i==352 ? strcpy(dest,"Blues Enneatonic 2");
+  i==353 ? strcpy(dest,"Blues Dorian Hexatonic");
+  i==354 ? strcpy(dest,"Blues Phrygian");
+  i==355 ? strcpy(dest,"Blues Minor Maj7");
+  i==356 ? strcpy(dest,"Blues Modified");
+  i==357 ? strcpy(dest,"Blues Leading Tone");
+  i==358 ? strcpy(dest,"Rock 'n Roll");
+  i==359 ? strcpy(dest,"Bebop");
+  i==360 ? strcpy(dest,"Bebop Major");
+  i==361 ? strcpy(dest,"Bebop Major Hexatonic");
+  i==362 ? strcpy(dest,"Bebop Major Heptatonic");
+  i==363 ? strcpy(dest,"Bebop Minor");
+  i==364 ? strcpy(dest,"Bebop Dorian");
+  i==365 ? strcpy(dest,"Bebop Melodic Minor");
+  i==366 ? strcpy(dest,"Bebop Harmonic Minor");
+  i==367 ? strcpy(dest,"Bebop Half-diminished");
+  i==368 ? strcpy(dest,"Bebop Locrian");
+  i==369 ? strcpy(dest,"Bebop Chromatic");
+  i==370 ? strcpy(dest,"Whole-Tone");
+  i==371 ? strcpy(dest,"Augmented");
+  i==372 ? strcpy(dest,"Inverted Augmented");
+  i==373 ? strcpy(dest,"Diminished");
+  i==374 ? strcpy(dest,"Diminished Half-tone");
+  i==375 ? strcpy(dest,"Chromatic");
+  i==376 ? strcpy(dest,"Tritone");
+  i==377 ? strcpy(dest,"Raga Neelangi");
+  i==378 ? strcpy(dest,"Messiaen 2nd Mode Truncated");
+  i==379 ? strcpy(dest,"Messiaen 3rd Mode");
+  i==380 ? strcpy(dest,"Messiaen 4th Mode");
+  i==381 ? strcpy(dest,"Messiaen 4th Mode Inverse");
+  i==382 ? strcpy(dest,"Messiaen 5th Mode");
+  i==383 ? strcpy(dest,"Messiaen 5th Mode Inverse");
+  i==384 ? strcpy(dest,"Messiaen 6th Mode");
+  i==385 ? strcpy(dest,"Messiaen 6th Mode Inverse");
+  i==386 ? strcpy(dest,"Messiaen 7th Mode");
+  i==387 ? strcpy(dest,"Messiaen 7th Mode Inverse");
+  i==388 ? strcpy(dest,"Genus Chromaticum");
+  i==389 ? strcpy(dest,"Two-semitone Tritone");
+  i==390 ? strcpy(dest,"Symmetrical Decatonic");
+  i==391 ? strcpy(dest,"Van Der Host");
+  i==392 ? strcpy(dest,"Algerian Octatonic");
+  i==393 ? strcpy(dest,"Algerian");
+  i==394 ? strcpy(dest,"Eskimo Hexatonic");
+  i==395 ? strcpy(dest,"Eskimo Hexatonic 2");
+  i==396 ? strcpy(dest,"Hamel");
+  i==397 ? strcpy(dest,"Hawaiian");
+  i==398 ? strcpy(dest,"LG Octatonic");
+  i==399 ? strcpy(dest,"Pyramid Hexatonic");
+  i==400 ? strcpy(dest,"Nonatonic 2");
+  i==401 ? strcpy(dest,"Symmetrical Nonatonic");
+);
+
+
+// ---------------- basic helpers ----------------
+function pmod(x, m) ( x - m*floor(x/m); );
+function bitv(m, b) ( floor(m / (2^b)) & 1; );
+function copy_arr(dst, src, n) local(i) ( i = 0; loop(n, dst[i] = src[i]; i += 1;); );
+function sort_asc(p, n) local(i, j, v) (
+  i = 1;
+  loop(n - 1,
+    v = p[i]; j = i - 1;
+    while (j >= 0 && p[j] > v) ( p[j+1] = p[j]; j -= 1; );
+    p[j+1] = v;
+    i += 1;
+  );
+);
+// PositionVector range: span rounded up to a whole number of `m` cycles
+function calc_range(p, n, m) local(i, mx, mn) (
+  n <= 0 ? m : (
+    mx = p[0]; mn = p[0]; i = 1;
+    loop(n - 1, p[i] > mx ? ( mx = p[i]; ); p[i] < mn ? ( mn = p[i]; ); i += 1;);
+    m * (floor((mx - mn) / m) + 1);
+  );
+);
+// PositionVector.element(idx)
+function pv_el(p, n, r, idx) local(q) (
+  n <= 0 ? 0 : ( q = floor(idx / n); p[idx - q*n] + abs(r)*q; );
+);
+function pos_to_iv(p, n, iv) local(i, R) (
+  R = calc_range(p, n, 12);
+  i = 0;
+  loop(n, iv[i] = pv_el(p, n, R, i + 1) - pv_el(p, n, R, i); i += 1;);
+);
+function iv_to_pos(start, iv, n, out) local(i, c) (
+  c = start; out[0] = c; i = 0;
+  loop(n - 1, c += iv[i]; i += 1; out[i] = c;);
+);
+function pos_mode(p, n, k) local(i) (
+  n >= 2 ? (
+    pos_to_iv(p, n, A_TIV);
+    i = 0; loop(n, A_TIV2[i] = A_TIV[pmod(k + i, n)]; i += 1;);
+    iv_to_pos(p[0], A_TIV2, n, A_TMP);
+    copy_arr(p, A_TMP, n);
+  );
+);
+function pos_degree(p, n, d) local(i, R) (
+  R = calc_range(p, n, 12);
+  i = 0; loop(n, A_TMP[i] = pv_el(p, n, R, d + i); i += 1;);
+  copy_arr(p, A_TMP, n);
+);
+// IntervalVector.inversion applied to a scale's intervals
+function pos_invert_iv(p, n, ax) local(i, na, len, t) (
+  n >= 2 ? (
+    pos_to_iv(p, n, A_TIV);
+    na = pmod(ax, n + 1);
+    i = 0; loop(floor(na / 2), t = A_TIV[i]; A_TIV[i] = A_TIV[na-1-i]; A_TIV[na-1-i] = t; i += 1;);
+    len = n - na;
+    i = 0; loop(floor(len / 2), t = A_TIV[na+i]; A_TIV[na+i] = A_TIV[n-1-i]; A_TIV[n-1-i] = t; i += 1;);
+    iv_to_pos(p[0], A_TIV, n, A_TMP);
+    copy_arr(p, A_TMP, n);
+  );
+);
+// PositionVector.inversion(axisIndex, sort=true)
+function pos_invert_pv(p, n, ax) local(i, av) (
+  n >= 1 ? (
+    av = p[pmod(ax, n)];
+    i = 0; loop(n, p[i] = 2*av - p[i]; i += 1;);
+    sort_asc(p, n);
+  );
+);
+function pos_mirror(p, n) local(i, s0, sl) (
+  n >= 1 ? (
+    sort_asc(p, n);
+    s0 = p[0]; sl = p[n-1];
+    i = 0; loop(n, A_TMP[i] = s0 + sl - p[n-1-i]; i += 1;);
+    copy_arr(p, A_TMP, n);
+  );
+);
+function pos_negative(p, n, root) local(i, axis, pc) (
+  axis = pmod(root*2 + 7, 12);   // 7 = best fifth step in 12-EDO
+  i = 0; loop(n, pc = pmod(p[i], 12); p[i] = p[i] - pc + pmod(axis - pc, 12); i += 1;);
+  sort_asc(p, n);
+);
+
+// ---------------- scale sources ----------------
+function mask_to_pos(m, out) local(b, n, f) (
+  f = -1; b = 0;
+  loop(12, (f < 0 && bitv(m, b)) ? ( f = b; ); b += 1;);
+  n = 0; b = 0;
+  loop(12, bitv(m, b) ? ( out[n] = b - f; n += 1; ); b += 1;);
+  n;
+);
+// iterative Euclidean (Bjorklund-style) interval generator for 12 steps
+function gen_euclid(ev, out) local(n, k, q, r, L, l, i, j, src, dst, slen, dlen, done, t) (
+  n = 12; k = ev; L = 0; done = 0;
+  while (done == 0) (
+    q = floor(n / k); r = n - q*k;
+    A_ELQ[L] = q; A_ELR[L] = r; A_ELK[L] = k;
+    r == 0 ? ( done = 1; ) : ( n = k; k = r; L += 1; );
+  );
+  src = A_EB1; dst = A_EB2;
+  slen = A_ELK[L]; i = 0; loop(slen, src[i] = A_ELQ[L]; i += 1;);
+  l = L - 1;
+  while (l >= 0) (
+    q = A_ELQ[l]; r = A_ELR[l];
+    dlen = 0; i = 0;
+    loop(r,
+      j = 0; loop(src[i] - 1, dst[dlen] = q; dlen += 1; j += 1;);
+      dst[dlen] = q + 1; dlen += 1;
+      i += 1;
+    );
+    t = src; src = dst; dst = t; slen = dlen;
+    l -= 1;
+  );
+  i = 0; loop(slen, out[i] = src[i]; i += 1;);
+  slen;
+);
+function src_mask() local(m, c, ix, i, p, cnt, ev) (
+  m = 0;
+  sc_src == 0 ? (
+    c = floor(sc_cat + 0.5); ix = floor(sc_idx + 0.5);
+    ix > M_CATN[c] - 1 ? ( ix = M_CATN[c] - 1; );
+    m = M_LIB[M_CATS[c] + ix];
+  ) : sc_src == 1 ? (
+    ev = min(12, max(1, floor(gen_ev + 0.5)));
+    cnt = gen_euclid(ev, A_TMP);
+    p = 0; i = 0;
+    loop(cnt, m += 2^p; p += A_TMP[i]; i += 1;);
+  ) : sc_src == 2 ? (
+    ev = min(12, max(1, floor(gen_ev + 0.5)));
+    i = 0;
+    loop(ev, p = pmod(floor(i * 12 / ev), 12); bitv(m, p) ? 0 : ( m += 2^p; ); i += 1;);
+  ) : sc_src == 3 ? (
+    ev = max(1, floor(gen_ev + 0.5));
+    i = 0;
+    loop(ev, p = pmod(i * floor(gen_mult + 0.5), 12); bitv(m, p) ? 0 : ( m += 2^p; ); i += 1;);
+  ) : (
+    i = 0;
+    loop(scp_n, p = pmod(A_SCP[i], 12); bitv(m, p) ? 0 : ( m += 2^p; ); i += 1;);
+  );
+  m;
+);
+
+// scale transform chain (fixed order: Root, Mode, Degree, Invert, Mirror, Negative)
+function build_scale(out, k) local(i, n) (
+  n = bn;
+  copy_arr(out, A_BP, n);
+  i = 0; loop(n, out[i] += tx_root; i += 1;);
+  (n >= 2 && k != 0) ? ( pos_mode(out, n, k); );
+  tx_deg != 0 ? ( pos_degree(out, n, tx_deg); );
+  tx_inv ? ( pos_invert_iv(out, n, tx_inv_ax); );
+  tx_mir ? ( pos_mirror(out, n); );
+  tx_neg ? ( pos_negative(out, n, tx_root); );
+);
+
+// ---------------- chord ops ----------------
+function op_close(p, n) local(i, j, oct, found, m, bestOct, bestCnt, n2, mapped, dup) (
+  m = 0; i = 0;
+  loop(n,
+    oct = floor(p[i] / 12) * 12;
+    found = -1; j = 0;
+    loop(m, A_TIV[j] == oct ? ( found = j; ); j += 1;);
+    found >= 0 ? ( A_TIV2[found] += 1; ) : ( A_TIV[m] = oct; A_TIV2[m] = 1; m += 1; );
+    i += 1;
+  );
+  bestOct = A_TIV[0]; bestCnt = A_TIV2[0]; j = 1;
+  loop(m - 1,
+    (A_TIV2[j] > bestCnt || (A_TIV2[j] == bestCnt && A_TIV[j] < bestOct)) ? ( bestCnt = A_TIV2[j]; bestOct = A_TIV[j]; );
+    j += 1;
+  );
+  n2 = 0; i = 0;
+  loop(n,
+    mapped = bestOct + pmod(p[i], 12);
+    dup = 0; j = 0;
+    loop(n2, A_TMP[j] == mapped ? ( dup = 1; ); j += 1;);
+    dup ? 0 : ( A_TMP[n2] = mapped; n2 += 1; );
+    i += 1;
+  );
+  sort_asc(A_TMP, n2);
+  copy_arr(p, A_TMP, n2);
+  n2;
+);
+function op_resize(p, n) local(i, R, cnt, s, e) (
+  sort_asc(p, n);
+  R = calc_range(p, n, 12);
+  s = cx_rs0; e = cx_rs1; cnt = 0;
+  s <= e ? (
+    i = s; loop(e - s + 1, A_TMP[cnt] = pv_el(p, n, R, i); cnt += 1; i += 1;);
+  ) : (
+    i = s; loop(s - e + 1, A_TMP[cnt] = pv_el(p, n, R, i); cnt += 1; i -= 1;);
+  );
+  copy_arr(p, A_TMP, cnt);
+  cnt;
+);
+// spread: iterative backtracking search (EEL2 has no recursion)
+function spread_build(d, n, strict, minLow, minHigh) local(mi, prev, lo, hi, i, cnt, c, off, j, base) (
+  mi = n > 2 ? floor(minLow + (minHigh - minLow) * d / (n - 2) + 0.5) : minLow;
+  prev = SP_RES[d]; lo = prev + mi + 1; hi = prev + 11;
+  cnt = 0; i = 0; base = d * 16;
+  loop(n - 1,
+    bitv(SP_USED[d], i) == 0 ? (
+      off = pmod(SP_PC[i] - pmod(lo, 12), 12);
+      c = lo + off;
+      (strict == 0 || c <= hi) ? (
+        j = cnt;
+        while (j > 0 && SP_CAND[base + j - 1] > c) (
+          SP_CAND[base + j] = SP_CAND[base + j - 1]; SP_IDX[base + j] = SP_IDX[base + j - 1]; j -= 1;
+        );
+        SP_CAND[base + j] = c; SP_IDX[base + j] = i; cnt += 1;
+      );
+    );
+    i += 1;
+  );
+  SP_CNT[d] = cnt;
+);
+function spread_dfs(n, strict, minLow, minHigh) local(d, nodes, found, j) (
+  d = 0; nodes = 0; found = 0;
+  SP_USED[0] = 0;
+  spread_build(0, n, strict, minLow, minHigh); SP_PTR[0] = 0;
+  while (d >= 0 && found == 0 && nodes < 20000) (
+    SP_PTR[d] >= SP_CNT[d] ? ( d -= 1; ) : (
+      j = SP_PTR[d]; SP_PTR[d] += 1; nodes += 1;
+      SP_RES[d + 1] = SP_CAND[d * 16 + j];
+      (d + 1 == n - 1) ? ( found = 1; ) : (
+        SP_USED[d + 1] = SP_USED[d] + 2^SP_IDX[d * 16 + j];
+        d += 1;
+        spread_build(d, n, strict, minLow, minHigh); SP_PTR[d] = 0;
+      );
+    );
+  );
+  found;
+);
+function op_spread(p, n) local(i, minLow, minHigh, ok) (
+  (n > 1 && n <= 16) ? (
+    copy_arr(A_TMP, p, n); sort_asc(A_TMP, n);
+    minLow = 2;                          // round(log2(9/8) * 12)
+    minHigh = cx_topcl ? 0 : 5;          // round(log2(4/3) * 12)
+    SP_RES[0] = A_TMP[0];
+    i = 1; loop(n - 1, SP_PC[i - 1] = pmod(A_TMP[i], 12); i += 1;);
+    ok = spread_dfs(n, 1, minLow, minHigh);
+    ok == 0 ? ( ok = spread_dfs(n, 0, minLow, minHigh); );
+    ok ? ( copy_arr(p, SP_RES, n); );
+  );
+);
+// voice leading (complexity 0 = closest voicing to the previous chord)
+function var_dist(a, na, b, nb) local(i, j, minLen, maxLen, tot, x, mn, mx, d, lp, sp, sl) (
+  copy_arr(A_TIV, a, na); sort_asc(A_TIV, na);
+  copy_arr(A_TIV2, b, nb); sort_asc(A_TIV2, nb);
+  minLen = min(na, nb); maxLen = max(na, nb);
+  tot = 0; i = 0;
+  loop(minLen, tot += abs(A_TIV[i] - A_TIV2[i]); i += 1;);
+  na >= nb ? ( lp = A_TIV; sp = A_TIV2; sl = nb; ) : ( lp = A_TIV2; sp = A_TIV; sl = na; );
+  i = minLen;
+  loop(maxLen - minLen,
+    x = lp[i]; mn = 1000000000000000; mx = -1000000000000000; j = 0;
+    loop(sl, d = abs(x - sp[j]); d < mn ? ( mn = d; ); d > mx ? ( mx = d; ); j += 1;);
+    tot += (mn + mx) / 2;
+    i += 1;
+  );
+  tot;
+);
+function op_voice_leading(p, n) local(Rr, Rt, minV, i, g, center, c, j, d, bestD, bestI) (
+  n > 0 ? (
+    (vl_n > 0) ? (
+      Rr = calc_range(A_VL, vl_n, 12); Rt = calc_range(p, n, 12);
+      minV = A_VL[0];
+      i = (floor(A_VL[0] / Rr) - floor(p[0] / Rt)) * n;
+      g = 0; while (pv_el(p, n, Rt, i) <= minV && g < 2000) ( i += 1; g += 1; );
+      g = 0; while (pv_el(p, n, Rt, i) > minV && g < 2000) ( i -= 1; g += 1; );
+      center = i; bestD = 1000000000000000; bestI = center; c = center - n;
+      loop(2 * n + 1,
+        j = 0; loop(n, A_TMP2[j] = pv_el(p, n, Rt, c + j); j += 1;);
+        d = var_dist(A_VL, vl_n, A_TMP2, n);
+        d < bestD ? ( bestD = d; bestI = c; );
+        c += 1;
+      );
+      j = 0; loop(n, A_TMP2[j] = pv_el(p, n, Rt, bestI + j); j += 1;);
+      copy_arr(p, A_TMP2, n);
+    );
+    copy_arr(A_VL, p, n); vl_n = n;
+  );
+);
+
+// ---------------- slider writes that don't count as user edits ----------------
+function set_sl(idx, v) ( slider(idx) = v; SH[idx] = v; sliderchange(2^(idx - 1)); );
+function set_shift(v) local(c) ( c = max(DEG_MIN, min(DEG_MAX, v)); set_sl(S_SHIFT, c); );
+
+// ---------------- chord builder ----------------
+// returns number of chord tones written to A_CH (step space)
+function chord_select() local(N, es, s, sR, nc, i, v, rot, outLen, cr, k, cum, ns, r, q) (
+  N = sc_n; s = ch_shift; v = floor(ch_voices + 0.5); rot = ch_rot;
+  cx_neg ? (
+    copy_arr(A_EFF, A_SC, N); pos_negative(A_EFF, N, tx_root);
+    es = A_EFF;
+    q = s / N; q = q >= 0 ? floor(q) : ceil(q);
+    r = s - N * q;
+    s = s - 2 * r;                       // foldDegree
+  ) : ( es = A_SC; );
+  sR = calc_range(es, N, 12);
+  cr_type == 0 ? (
+    nc = 0; i = 0;
+    loop(crp_n, A_CRP[i] >= 0 ? ( A_CRIT[nc] = A_CRP[i]; nc += 1; ); i += 1;);
+    nc == 0 ? ( 0; ) : (
+      sort_asc(A_CRIT, nc);
+      i = 0; loop(nc, A_CRIT[i] += s; i += 1;);
+      cr = calc_range(A_CRIT, nc, N);
+      outLen = v > 0 ? v : nc;
+      k = 0; loop(outLen, A_CH[k] = pv_el(es, N, sR, pv_el(A_CRIT, nc, cr, rot + k)); k += 1;);
+      outLen;
+    );
+  ) : (
+    ns = cri_n;
+    ns <= 0 ? ( 0; ) : (
+      outLen = v > 0 ? v : ns;
+      cum = s; k = 0;
+      loop(outLen, A_CH[k] = pv_el(es, N, sR, cum); cum += A_CRI[pmod(rot + k, ns)]; k += 1;);
+      outLen;
+    );
+  );
+);
+function chord_transforms(n) local(i) (
+  pos_degree(A_CH, n, cx_pos);
+  cx_off != 0 ? ( i = 0; loop(n, A_CH[i] += cx_off; i += 1;); );
+  (cx_mode != 0 && n >= 2) ? ( pos_mode(A_CH, n, cx_mode); );
+  cx_inv ? ( pos_invert_pv(A_CH, n, cx_inv_ax); );
+  cx_mir ? ( pos_mirror(A_CH, n); );
+  cx_close ? ( n = op_close(A_CH, n); );
+  cx_spread ? ( op_spread(A_CH, n); );
+  cx_resize ? ( n = op_resize(A_CH, n); );
+  cx_vl ? ( op_voice_leading(A_CH, n); );
+  n;
+);
+function chord_finalize(n) local(i, note, j, dup) (
+  cm_n = 0; i = 0;
+  loop(n,
+    note = A_CH[i] + floor(ch_oct + 0.5) * 12 + 12 + root_oct_off;   // step space (C0 = 0) -> MIDI
+    (note >= 0 && note <= 127) ? (
+      dup = 0; j = 0;
+      loop(cm_n, A_CHM[j] == note ? ( dup = 1; ); j += 1;);
+      dup ? 0 : ( A_CHM[cm_n] = note; cm_n += 1; );
+    );
+    i += 1;
+  );
+);
+function rebuild_chord() local(n) (
+  ch_cnt = 0; cm_n = 0;
+  sc_n > 0 ? (
+    n = chord_select();
+    n > 0 ? ( n = chord_transforms(n); ch_cnt = n; chord_finalize(n); );
+  );
+);
+function rebuild_scale() local(m, i, c) (
+  m = src_mask();
+  bn = mask_to_pos(m, A_BP);
+  bn <= 0 ? ( sc_n = 0; ch_cnt = 0; cm_n = 0; ) : (
+    sc_n = bn;
+    build_scale(A_SC, tx_mode);
+    copy_arr(A_PRE, A_SC, sc_n);
+    auto_mod_t >= 0 ? (
+      i = 0; loop(sc_n, A_SC[i] = pmod(A_SC[i] + auto_mod_t, 12); i += 1;);
+      sort_asc(A_SC, sc_n);
+    );
+    build_scale(A_BASE, auto_base_rot);
+    sc_n != last_N ? (
+      last_N = sc_n;
+      c = max(DEG_MIN, min(DEG_MAX, ch_shift));
+      c != ch_shift ? ( set_sl(S_SHIFT, c); );
+    );
+    rebuild_chord();
+  );
+  // pitch-class mask of the live scale (for display)
+  scale_pcm = 0; i = 0;
+  loop(sc_n, c = pmod(A_SC[i], 12); bitv(scale_pcm, c) ? 0 : ( scale_pcm += 2^c; ); i += 1;);
+  name_dirty = 1;
+);
+
+
+// ---------------- output: polyphonic voices with shared-note ownership ----------------
+// Every held input key owns a voice: the chord computed when that key was pressed.
+// O_REF counts how many voices currently own each (channel, note):
+//  - a note-on is sent only when the count goes 0 -> 1, so a note two chords have in
+//    common is held (legato), not re-triggered, unless Common Notes = Retrigger;
+//  - a note-off is sent only when the count returns to 0, so releasing one key never
+//    cuts a note that another held key's chord still uses.
+function out_on(offs, note, vel, och) local(ix) (
+  ix = och * 128 + note;
+  O_REF[ix] <= 0 ? (
+    midisend(offs, 0x90 + och, note, vel);
+  ) : common_mode == 1 ? (
+    midisend(offs, 0x80 + och, note, 0);
+    midisend(offs, 0x90 + och, note, vel);
+  );
+  O_REF[ix] += 1;
+);
+function out_off(offs, note, och) local(ix) (
+  ix = och * 128 + note;
+  O_REF[ix] > 0 ? (
+    O_REF[ix] -= 1;
+    O_REF[ix] <= 0 ? ( midisend(offs, 0x80 + och, note, 0); );
+  );
+);
+function voice_off(offs, key) local(i, b, och) (
+  V_ACT[key] ? (
+    b = V_NOTES + key * 64; och = V_CH[key];
+    i = 0; loop(V_CNT[key], out_off(offs, b[i], och); i += 1;);
+    V_ACT[key] = 0; V_CNT[key] = 0;
+  );
+);
+// direct = 1: the voice is just the key itself (pass-through); otherwise the current chord
+function voice_on(offs, key, vel, ch, direct) local(i, b, n, och) (
+  voice_off(offs, key);
+  och = out_ch == 0 ? ch : out_ch - 1;
+  b = V_NOTES + key * 64;
+  direct ? ( b[0] = key; n = 1; ) : (
+    n = min(cm_n, 64); i = 0; loop(n, b[i] = A_CHM[i]; i += 1;);
+  );
+  V_ACT[key] = 1; V_CNT[key] = n; V_CH[key] = och;
+  i = 0; loop(n, out_on(offs, b[i], vel, och); i += 1;);
+);
+function all_off(offs) local(ix, k) (
+  ix = 0;
+  loop(2048,
+    O_REF[ix] > 0 ? ( k = floor(ix / 128); midisend(offs, 0x80 + k, ix - k * 128, 0); );
+    O_REF[ix] = 0; ix += 1;
+  );
+  ix = 0; loop(128, V_ACT[ix] = 0; V_CNT[ix] = 0; ix += 1;);
+);
+
+// ---------------- held-key stack (all held input notes, oldest -> newest) ----------------
+function stk_find(id) local(i, r) ( r = -1; i = 0; loop(stk_n, A_STK[i] == id ? ( r = i; ); i += 1;); r; );
+function stk_press(id, vel, ch) local(f) (
+  f = stk_find(id);
+  f >= 0 ? ( 0; ) : ( A_STK[stk_n] = id; A_STKV[stk_n] = vel; A_STKC[stk_n] = ch; stk_n += 1; 1; );
+);
+function stk_release(id) local(f, wasTop, i) (
+  f = stk_find(id);
+  f < 0 ? ( 0; ) : (
+    wasTop = (f == stk_n - 1);
+    i = f; loop(stk_n - 1 - f, A_STK[i] = A_STK[i+1]; A_STKV[i] = A_STKV[i+1]; A_STKC[i] = A_STKC[i+1]; i += 1;);
+    stk_n -= 1;
+    wasTop;
+  );
+);
+function white_degree(note) local(anchor, oct, pc, pos) (
+  pc = pmod(note, 12);
+  pos = pc == 0 ? 0 : pc == 2 ? 1 : pc == 4 ? 2 : pc == 5 ? 3 : pc == 7 ? 4 : pc == 9 ? 5 : pc == 11 ? 6 : -1;
+  pos < 0 ? ( NONE; ) : (
+    anchor = 60 + (floor(ch_oct + 0.5) - 4) * 12;   // degree 0 = the key whose pitch equals the chord's root
+    floor((note - anchor) / 12) * 7 + pos;
+  );
+);
+
+// ---------------- Auto mode ----------------
+function contains_notes(p, n) local(i, j, pc, ok, hit) (
+  ok = 1; i = 0;
+  loop(stk_n,
+    pc = pmod(A_STK[i], 12); hit = 0; j = 0;
+    loop(n, pmod(p[j], 12) == pc ? ( hit = 1; ); j += 1;);
+    hit ? 0 : ( ok = 0; );
+    i += 1;
+  );
+  ok;
+);
+function manhattan(a, b, n) local(i, s) ( s = 0; i = 0; loop(n, s += abs(a[i] - b[i]); i += 1;); s; );
+function step_to_degree(p, n, step) local(i, R, diff, bestI, bestD, d, found, res) (
+  R = calc_range(p, n, 12);
+  bestI = 0; bestD = 1000000000000000; found = 0; res = 0; i = 0;
+  loop(n,
+    found == 0 ? (
+      diff = step - p[i];
+      pmod(diff, R) == 0 ? ( found = 1; res = i + (diff / R) * n; ) : (
+        d = min(pmod(step - p[i], 12), pmod(p[i] - step, 12));
+        d < bestD ? ( bestD = d; bestI = i; );
+      );
+    );
+    i += 1;
+  );
+  found ? res : bestI;
+);
+function ic_pick(ref) local(i, j, bi, bd, d, n) (
+  n = sc_n; bi = -1; bd = 1000000000000000;
+  pos_to_iv(A_BASE, n, A_TIV);
+  i = 0;
+  loop(n,
+    j = 0; loop(n, A_TIV2[j] = A_TIV[pmod(i + j, n)]; j += 1;);
+    iv_to_pos(A_BASE[0], A_TIV2, n, A_TMP2);
+    contains_notes(A_TMP2, n) ? (
+      d = manhattan(ref, A_TMP2, n);
+      d < bd ? ( bd = d; bi = i; );
+    );
+    i += 1;
+  );
+  bi;
+);
+function mod_pick(ref) local(i, j, bi, bd, d, n) (
+  n = sc_n; bi = -1; bd = 1000000000000000;
+  i = 0;
+  loop(12,
+    j = 0; loop(n, A_TMP2[j] = pmod(A_PRE[j] + i, 12); j += 1;);
+    sort_asc(A_TMP2, n);
+    contains_notes(A_TMP2, n) ? (
+      d = manhattan(ref, A_TMP2, n);
+      d < bd ? ( bd = d; bi = i; );
+    );
+    i += 1;
+  );
+  bi;
+);
+// The baseline (initial selected scale) is shared by both sub-modes: mode rotation + degree.
+// Modulation transposition (auto_mod_t) is always relative to it.
+function auto_enter() (
+  auto_base_shift = ch_shift;
+  auto_base_rot = tx_mode;
+  auto_mod_t = -1;
+  need_rebuild = 1;
+);
+// back to the baseline without touching the baseline itself (rebuild happens later)
+function auto_restore() (
+  auto_mod_t = -1;
+  set_sl(S_MODE, auto_base_rot);
+  set_shift(auto_base_shift);
+  need_rebuild = 1;
+);
+function auto_do_reset(offs) (
+  all_off(offs);
+  auto_mod_t = -1;
+  set_sl(S_MODE, auto_base_rot); rebuild_scale();
+  set_shift(auto_base_shift); rebuild_chord();
+);
+function auto_changed(offs) local(top, vel, ch, p, ref, bi, step, deg) (
+  top = A_STK[stk_n - 1]; vel = A_STKV[stk_n - 1]; ch = A_STKC[stk_n - 1];
+  (auto_rst && stk_n == 1) ? (
+    auto_mod_t = -1;
+    set_sl(S_MODE, auto_base_rot); rebuild_scale();
+    set_shift(auto_base_shift); rebuild_chord();
+  );
+  contains_notes(A_SC, sc_n) ? 0 : (
+    auto_sub == 0 ? (
+      sc_n >= 2 ? (
+        ref = auto_ref ? A_SC : A_BASE;
+        bi = ic_pick(ref);
+        bi >= 0 ? ( set_sl(S_MODE, pmod(auto_base_rot + bi, sc_n)); rebuild_scale(); );
+      );
+    ) : (
+      ref = auto_ref ? A_SC : A_PRE;
+      bi = mod_pick(ref);
+      bi >= 0 ? ( auto_mod_t = bi; rebuild_scale(); );
+    );
+  );
+  step = top - 60;
+  deg = step_to_degree(A_SC, sc_n, step);
+  set_shift(deg); rebuild_chord();
+  voice_on(offs, top, vel, ch, 0);
+);
+
+// ---------------- note dispatch (polyphonic) ----------------
+// Each held key triggers its own chord. The global parameters (root / degree / scale
+// mode) follow the most recently pressed key; chords of other held keys keep sounding.
+function trigger(offs, note, vel, ch) (
+  in_mode == 2 ? (
+    voice_on(offs, note, vel, ch, 1);
+  ) : in_mode == 0 ? (
+    root_oct_off = (floor(note / 12) - 5) * 12;   // no octave looping: the chord sits in the octave of the key (middle C octave = Chord Octave setting)
+    set_sl(S_ROOT, pmod(note, 12)); rebuild_scale();
+    voice_on(offs, note, vel, ch, 0);
+  ) : in_mode == 1 ? (
+    set_shift(white_degree(note)); rebuild_chord();
+    voice_on(offs, note, vel, ch, 0);
+  ) : (
+    auto_changed(offs);      // Auto: considers ALL held notes, then voices this key
+  );
+);
+function do_note_on(offs, note, vel, ch) (
+  (in_mode == 1 && white_degree(note) == NONE) ? ( 0; ) : (   // Degree mode: white keys only
+    stk_release(note);          // same key struck again while held: restart it
+    voice_off(offs, note);
+    stk_press(note, vel, ch);
+    trigger(offs, note, vel, ch);
+  );
+);
+function do_note_off(offs, note) (
+  stk_release(note);
+  voice_off(offs, note);
+);
+function panic(offs) local(i) (
+  all_off(offs);
+  stk_n = 0;
+  i = 0; loop(128, A_NDEG[i] = NONE; i += 1;);
+);
+
+// ---------------- parameter change handling ----------------
+function handle_changes(offs) local(i, c_mode, c_sub, c_txmode, c_txroot, any) (
+  c_mode = in_mode != SH[S_INMODE];
+  c_sub = auto_sub != SH[S_SUB];
+  c_txmode = tx_mode != SH[S_MODE];
+  c_txroot = tx_root != SH[S_ROOT];
+  any = (lists_ver != lists_ver_sh); i = 1;
+  loop(NSL, slider(i) != SH[i] ? ( any = 1; ); i += 1;);
+  need_rebuild = any;
+
+  c_mode ? (
+    (prev_mode == 3 && in_mode != 3) ? ( c_txmode ? ( auto_mod_t = -1; need_rebuild = 1; ) : ( auto_restore(); ); );   // leaving Auto: back to the initial scale
+    root_oct_off = 0;
+    panic(offs);
+    in_mode == 3 ? ( auto_enter(); );
+    prev_mode = in_mode;
+  ) : in_mode == 3 ? (
+    c_sub ? (
+      c_txmode ? ( auto_enter(); ) : ( auto_restore(); );   // switching sub-mode returns to the initial scale
+    ) : (
+      (c_txmode && auto_sub == 0) ? ( auto_enter(); );
+      (c_txroot && auto_sub == 1) ? ( auto_enter(); );
+      (c_txmode && auto_sub == 1) ? ( auto_base_rot = tx_mode; );   // user picked a new mode: it is the new baseline
+    );
+  );
+
+  need_rebuild ? ( rebuild_scale(); );
+
+  act != 0 ? (
+    act == 1 ? ( auto_do_reset(offs); );
+    act == 2 ? ( vl_n = 0; );
+    set_sl(S_ACT, 0);
+  );
+
+  i = 1; loop(NSL, SH[i] = slider(i); i += 1;);
+  lists_ver_sh = lists_ver;
+);
+
+@block
+handle_changes(0);
+while (midirecv(offs, m1, m2, m3)) (
+  st = m1 & 0xF0; chn = m1 & 15;
+  (st == 0x90 && m3 > 0) ? (
+    do_note_on(offs, m2, m3, chn);
+  ) : (st == 0x80 || (st == 0x90 && m3 == 0)) ? (
+    do_note_off(offs, m2);
+  ) : (
+    (st == 0xB0 && (m2 == 123 || m2 == 120)) ? ( panic(offs); );
+    midisend(offs, m1, m2, m3);
+  );
+);
+
+@serialize
+file_var(0, crp_n); file_mem(0, A_CRP, LIST_MAX);
+file_var(0, cri_n); file_mem(0, A_CRI, LIST_MAX);
+file_var(0, scp_n); file_mem(0, A_SCP, LIST_MAX);
+crp_n = max(0, min(LIST_MAX, crp_n)); cri_n = max(0, min(LIST_MAX, cri_n)); scp_n = max(0, min(LIST_MAX, scp_n));
+lists_ver += 1;
+
+@gfx 1010 530
+// =====================================================================
+//  GUI  (design size 1010 x 530, scaled uniformly to fit the window)
+// =====================================================================
+DW = 1010; DH = 530;
+PCNAMES = "C C#D D#E F F#G G#A A#B ";
+
+function hit(x, y, w, h) ( mx >= x && mx < x + w && my >= y && my < y + h; );
+function fr(x, y, w, h) ( gfx_rect(ox + x * uis, oy + y * uis, w * uis, h * uis); );
+function ft(x, y, s, fi) ( gfx_setfont(fi); gfx_x = ox + x * uis; gfx_y = oy + y * uis; gfx_drawstr(s); );
+function ftc(x, y, w, h, s, fi) local(tw, th) (
+  gfx_setfont(fi); gfx_measurestr(s, tw, th);
+  gfx_x = ox + (x + w / 2) * uis - tw / 2; gfx_y = oy + (y + h / 2) * uis - th / 2; gfx_drawstr(s);
+);
+function ftr(x, y, w, s, fi) local(tw, th) (   // right aligned, x = left edge of box of width w
+  gfx_setfont(fi); gfx_measurestr(s, tw, th);
+  gfx_x = ox + (x + w) * uis - tw; gfx_y = oy + y * uis; gfx_drawstr(s);
+);
+function fit_head(s, maxw, fi) local(tw, th, len) (   // keep the beginning, trim the end
+  gfx_setfont(fi); gfx_measurestr(s, tw, th); len = strlen(s);
+  while (tw > maxw * uis && len > 1) ( len -= 1; str_setlen(s, len); gfx_measurestr(s, tw, th); );
+);
+function fit_tail(s, maxw, fi) local(tw, th) (     // keep the end, trim the beginning
+  gfx_setfont(fi); gfx_measurestr(s, tw, th);
+  while (tw > maxw * uis && strlen(s) > 1) ( str_delsub(s, 0, 1); gfx_measurestr(s, tw, th); );
+);
+function pcname(pc, dst) ( strcpy_substr(dst, PCNAMES, pc * 2, (pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10) ? 2 : 1); );
+function note_name(n, dst) local(pc) (
+  pc = pmod(n, 12); pcname(pc, dst);
+  sprintf(#nn_oct, "%d", floor(n / 12) - 1); strcat(dst, #nn_oct);
+);
+
+// ---------- generic widgets ----------
+function btn(x, y, w, h, s, on, fi) local(hov) (
+  hov = hit(x, y, w, h);
+  on ? gfx_set(0.93, 0.62, 0.28, 1) : ( hov ? gfx_set(0.26, 0.29, 0.35, 1) : gfx_set(0.18, 0.20, 0.25, 1) );
+  fr(x, y, w, h);
+  on ? gfx_set(0.08, 0.09, 0.11, 1) : gfx_set(0.86, 0.85, 0.82, 1);
+  ftc(x, y, w, h, s, fi);
+  hov && mclick;
+);
+function set_sl_ui(si, v) ( slider(si) != v ? ( slider(si) = v; slider_automate(2^(si - 1)); ); );
+function tog(x, y, w, h, s, si) ( btn(x, y, w, h, s, slider(si) > 0.5, 1) ? set_sl_ui(si, slider(si) > 0.5 ? 0 : 1); );
+function opt(x, y, w, h, s, si, val) ( btn(x, y, w, h, s, slider(si) == val, 1) ? set_sl_ui(si, val); );
+// value box with label: click left/right half = -1/+1, drag, wheel, right-click = default
+function stepper(x, y, w, lw, label, si, vmin, vmax, fmt, dflt) local(bx, bw, v, nv, hov, id) (
+  bx = x + lw; bw = w - lw; v = slider(si); nv = v; id = 100 + si;
+  hov = hit(bx, y, bw, 20);
+  (hov && wheel != 0) ? ( nv = v + (wheel > 0 ? 1 : -1); wheel = 0; );
+  (hov && rclick) ? ( nv = dflt; );
+  (hov && mclick) ? ( act_id = id; drag_x0 = mx; drag_v0 = v; drag_moved = 0; );
+  act_id == id ? (
+    mdown ? (
+      abs(mx - drag_x0) > 4 ? ( drag_moved = 1; );
+      drag_moved ? ( nv = drag_v0 + floor((mx - drag_x0) / 10); );
+    ) : (
+      (drag_moved == 0 && hov) ? ( nv = mx < bx + bw / 2 ? v - 1 : v + 1; );
+      act_id = 0;
+    );
+  );
+  nv = max(vmin, min(vmax, nv));
+  set_sl_ui(si, nv);
+  v = slider(si);
+  lw > 0 ? ( gfx_set(0.60, 0.62, 0.67, 1); ft(x, y + 3, label, 1); );
+  (hov || act_id == id) ? gfx_set(0.27, 0.30, 0.37, 1) : gfx_set(0.18, 0.20, 0.25, 1);
+  fr(bx, y, bw, 20);
+  gfx_set(0.45, 0.47, 0.52, 1);
+  gfx_triangle(ox + (bx + 9) * uis, oy + 6 * uis + y * uis, ox + (bx + 9) * uis, oy + 14 * uis + y * uis, ox + (bx + 4) * uis, oy + 10 * uis + y * uis);
+  gfx_triangle(ox + (bx + bw - 9) * uis, oy + 6 * uis + y * uis, ox + (bx + bw - 9) * uis, oy + 14 * uis + y * uis, ox + (bx + bw - 4) * uis, oy + 10 * uis + y * uis);
+  fmt == 1 ? ( pcname(pmod(v, 12), #vs); ) :
+  fmt == 2 ? ( v == 0 ? strcpy(#vs, "Same") : sprintf(#vs, "%d", v); ) :
+             ( sprintf(#vs, "%d", v); );
+  gfx_set(0.95, 0.94, 0.90, 1); ftc(bx, y, bw, 20, #vs, 1);
+);
+function section(x, y, w, h, num, title) (
+  gfx_set(0.105, 0.12, 0.145, 1); fr(x, y, w, h);
+  gfx_set(0.93, 0.62, 0.28, 1); ft(x + 8, y + 6, title, 1);
+  gfx_set(0.40, 0.42, 0.47, 1); ft(x + w - 16, y + 6, num, 1);
+);
+
+// ---------- integer-array lists (criteria / custom scale) ----------
+function list_ptr(id) ( id == 1 ? A_SCP : ( id == 2 ? A_CRP : A_CRI ); );
+function list_len(id) ( id == 1 ? scp_n : ( id == 2 ? crp_n : cri_n ); );
+function list_set_len(id, n) ( id == 1 ? ( scp_n = n; ) : ( id == 2 ? ( crp_n = n; ) : ( cri_n = n; ); ); lists_ver += 1; );
+function list_str(id, dst) local(p, n, i) (
+  p = list_ptr(id); n = list_len(id); strcpy(dst, ""); i = 0;
+  loop(n, sprintf(#ls_t, "%d", p[i]); strcat(dst, #ls_t); i < n - 1 ? strcat(dst, ", "); i += 1;);
+);
+function parse_list(str, dst, nonneg) local(i, len, c, cur, have, neg, n, v) (
+  len = strlen(str); n = 0; have = 0; neg = 0; cur = 0; i = 0;
+  loop(len + 1,
+    c = i < len ? str_getchar(str, i) : 32;
+    (c >= 48 && c <= 57) ? ( cur = cur * 10 + (c - 48); have = 1; ) :
+    (c == 45 && have == 0) ? ( neg = 1; ) : (
+      have ? (
+        v = neg ? -cur : cur;
+        ((nonneg == 0 || v >= 0) && n < LIST_MAX) ? ( dst[n] = v; n += 1; );
+      );
+      cur = 0; have = 0; neg = 0;
+    );
+    i += 1;
+  );
+  n;
+);
+// single-line text field. mode 0 = integer list, 1 = free text. returns 1 on commit
+function tf_run(id, x, y, w, h, mode) local(res, hov, c, len, ok, k, blink) (
+  res = 0; hov = hit(x, y, w, h);
+  (mclick && hov && tf_id != id) ? ( tf_id = id; strcpy(#tfbuf, #tfshow); tf_first = 1; );
+  tf_id == id ? (
+    tf_seen = 1;
+    k = 0;
+    loop(16,
+      c = tf_id == id ? gfx_getchar() : 0;
+      c > 0 ? (
+        c == 8 ? (
+          tf_first ? ( strcpy(#tfbuf, ""); ) : ( len = strlen(#tfbuf); len > 0 ? str_setlen(#tfbuf, len - 1); );
+          tf_first = 0;
+        ) : c == 13 ? ( res = 1; tf_id = 0; ) : c == 27 ? ( tf_id = 0; ) : (c >= 32 && c < 127) ? (
+          ok = mode == 1 ? 1 : ((c >= 48 && c <= 57) || c == 45 || c == 44 || c == 32);
+          ok ? (
+            tf_first ? ( strcpy(#tfbuf, ""); );
+            tf_first = 0;
+            sprintf(#tfc, "%c", c); strcat(#tfbuf, #tfc);
+          );
+        );
+      );
+    );
+    (mclick && !hov && tf_id == id) ? ( res = 1; tf_id = 0; );
+  );
+  tf_id == id ? ( gfx_set(0.93, 0.62, 0.28, 1); ) : ( gfx_set(0.30, 0.33, 0.40, 1); );
+  fr(x - 1, y - 1, w + 2, h + 2);
+  gfx_set(0.07, 0.08, 0.10, 1); fr(x, y, w, h);
+  tf_id == id ? (
+    strcpy(#tfdraw, #tfbuf);
+    blink = (floor(time_precise() * 2) & 1);
+    blink ? strcat(#tfdraw, "|");
+    fit_tail(#tfdraw, w - 10, 1);
+    gfx_set(1, 1, 1, 1);
+  ) : (
+    strcpy(#tfdraw, #tfshow);
+    fit_head(#tfdraw, w - 10, 1);
+    gfx_set(0.85, 0.85, 0.82, 1);
+  );
+  ft(x + 5, y + (h - 14) / 2, #tfdraw, 1);
+  res;
+);
+// editable value chips: click +1, right-click -1, shift-click removes, [+] appends
+function chips(x, y, id, minv) local(p, n, k, cx, cy, hov, v, j, shown, per, rows) (
+  p = list_ptr(id); n = list_len(id); per = 8; rows = 3;
+  shown = min(n + 1, per * rows);
+  k = 0;
+  loop(shown,
+    cx = x + (k % per) * 28; cy = y + floor(k / per) * 22;
+    hov = hit(cx, cy, 25, 20);
+    k < n ? (
+      v = p[k];
+      hov ? gfx_set(0.30, 0.34, 0.42, 1) : gfx_set(0.20, 0.23, 0.29, 1);
+      fr(cx, cy, 25, 20);
+      gfx_set(0.95, 0.94, 0.90, 1); sprintf(#ch_s, "%d", v); ftc(cx, cy, 25, 20, #ch_s, 1);
+      hov && mclick ? (
+        shiftk ? (
+          j = k; loop(n - 1 - k, p[j] = p[j + 1]; j += 1;);
+          list_set_len(id, n - 1);
+        ) : ( p[k] = v + 1; lists_ver += 1; );
+      );
+      (hov && rclick) ? ( p[k] = max(minv, v - 1); lists_ver += 1; );
+    ) : (
+      hov ? gfx_set(0.30, 0.34, 0.42, 1) : gfx_set(0.14, 0.16, 0.20, 1);
+      fr(cx, cy, 25, 20);
+      gfx_set(0.93, 0.62, 0.28, 1); ftc(cx, cy, 25, 20, "+", 1);
+      (hov && mclick && n < LIST_MAX) ? (
+        p[n] = n > 0 ? p[n - 1] + (id == 2 ? 2 : 0) : (id == 2 ? 0 : 2);
+        list_set_len(id, n + 1);
+      );
+    );
+    k += 1;
+  );
+  n + 1 > per * rows ? ( gfx_set(0.55, 0.57, 0.62, 1); sprintf(#more, "+%d more (edit with the text field)", n + 1 - per * rows); ft(x, y + rows * 22, #more, 3); );
+);
+// row of 12 pitch-class cells; returns clicked pc or -1
+function pc_row(x, y, mask, clickable) local(k, cx, on, hov, res, blk) (
+  res = -1; k = 0;
+  loop(12,
+    cx = x + k * 18.7;
+    on = bitv(mask, k);
+    blk = (k == 1 || k == 3 || k == 6 || k == 8 || k == 10);
+    hov = clickable && hit(cx, y, 17, 20);
+    on ? gfx_set(0.93, 0.62, 0.28, 1) : ( hov ? gfx_set(0.27, 0.30, 0.37, 1) : ( blk ? gfx_set(0.10, 0.11, 0.14, 1) : gfx_set(0.20, 0.22, 0.27, 1) ) );
+    fr(cx, y, 17, 20);
+    on ? gfx_set(0.08, 0.09, 0.11, 1) : gfx_set(0.62, 0.63, 0.66, 1);
+    pcname(k, #pcl); ftc(cx, y, 17, 20, #pcl, 3);
+    (clickable && hov && mclick) ? ( res = k; );
+    k += 1;
+  );
+  res;
+);
+
+// ---------- scale library helpers ----------
+function lib_cat_of(i) local(c, r) ( r = 0; c = 0; loop(9, (i >= M_CATS[c] && i < M_CATS[c] + M_CATN[c]) ? ( r = c; ); c += 1;); r; );
+function flt_build() local(i, c, st, cnt, pos, cur) (
+  flt_n = 0;
+  strlen(#filter) == 0 ? (
+    c = floor(sc_cat + 0.5); st = M_CATS[c]; cnt = M_CATN[c];
+    i = 0; loop(cnt, A_FLT[i] = st + i; i += 1;); flt_n = cnt;
+  ) : (
+    sprintf(#pat, "*%s*", #filter);
+    i = 0; loop(NLIB, lib_name(i, #tn); match(#pat, #tn) ? ( A_FLT[flt_n] = i; flt_n += 1; ); i += 1;);
+  );
+  // scroll so the current scale is visible
+  cur = M_CATS[floor(sc_cat + 0.5)] + floor(sc_idx + 0.5);
+  pos = -1; i = 0; loop(flt_n, A_FLT[i] == cur ? ( pos = i; ); i += 1;);
+  lst_off = pos >= 0 ? max(0, min(pos - 4, flt_n - LST_VIS)) : 0;
+  flt_dirty = 0;
+);
+function scale_title(dst) local(c, ix) (
+  sc_src == 0 ? (
+    c = floor(sc_cat + 0.5); ix = min(floor(sc_idx + 0.5), M_CATN[c] - 1);
+    lib_name(M_CATS[c] + ix, dst);
+  ) : sc_src == 1 ? ( sprintf(dst, "Euclidean (%d events)", gen_ev);
+  ) : sc_src == 2 ? ( sprintf(dst, "Clough-Douthett (%d events)", gen_ev);
+  ) : sc_src == 3 ? ( sprintf(dst, "Deep (%d events, x%d)", gen_ev, gen_mult);
+  ) : ( strcpy(dst, "Custom scale"); );
+);
+function in_chord(n) local(i, r) ( r = 0; i = 0; loop(cm_n, A_CHM[i] == n ? ( r = 1; ); i += 1;); r; );
+function key_color(n, black) local(pc, sc, ch) (
+  pc = pmod(n, 12); sc = bitv(scale_pcm, pc); ch = in_chord(n);
+  ch ? gfx_set(0.93, 0.62, 0.28, 1) :
+  sc ? ( black ? gfx_set(0.25, 0.44, 0.58, 1) : gfx_set(0.73, 0.83, 0.90, 1) ) :
+       ( black ? gfx_set(0.10, 0.11, 0.13, 1) : gfx_set(0.91, 0.89, 0.85, 1) );
+);
+function is_held(n) ( stk_find(n) >= 0; );
+function draw_kbd(x0, y0, w, h) local(low, n, pc, wi, kw, kx, isb, bw, nn) (
+  low = 60 + (floor(ch_oct + 0.5) - 5) * 12;
+  nn = 49; kw = w / 29; bw = kw * 0.6;
+  wi = 0; n = low;
+  loop(nn,
+    pc = pmod(n, 12);
+    isb = (pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10);
+    isb ? 0 : (
+      kx = x0 + wi * kw;
+      key_color(n, 0); fr(kx, y0, kw - 1, h);
+      is_held(n) ? ( gfx_set(0.78, 0.30, 0.30, 1); fr(kx, y0 + h - 6, kw - 1, 6); );
+      pc == 0 ? ( gfx_set(0.35, 0.35, 0.37, 1); note_name(n, #kn); ft(kx + 3, y0 + h - 17, #kn, 3); );
+      wi += 1;
+    );
+    n += 1;
+  );
+  wi = 0; n = low;
+  loop(nn,
+    pc = pmod(n, 12);
+    isb = (pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10);
+    isb ? (
+      kx = x0 + wi * kw - bw / 2;
+      key_color(n, 1); fr(kx, y0, bw, h * 0.6);
+      is_held(n) ? ( gfx_set(0.78, 0.30, 0.30, 1); fr(kx, y0 + h * 0.6 - 6, bw, 6); );
+    ) : ( wi += 1; );
+    n += 1;
+  );
+);
+
+// =====================================================================
+//  frame
+// =====================================================================
+LST_VIS = 11;
+uis = min(gfx_w / DW, gfx_h / DH); uis < 0.3 ? ( uis = 0.3; );
+ox = floor((gfx_w - DW * uis) / 2); oy = floor((gfx_h - DH * uis) / 2);
+uis != last_S ? (
+  gfx_setfont(1, "Arial", floor(12 * uis + 0.5));
+  gfx_setfont(2, "Arial", floor(22 * uis + 0.5));
+  gfx_setfont(3, "Arial", floor(10 * uis + 0.5));
+  last_S = uis;
+);
+mx = (mouse_x - ox) / uis; my = (mouse_y - oy) / uis;
+mdown = mouse_cap & 1; rdown = mouse_cap & 2;
+mclick = mdown && !(last_cap & 1); rclick = rdown && !(last_cap & 2);
+shiftk = mouse_cap & 8;
+wheel = mouse_wheel; mouse_wheel = 0;
+tf_seen = 0;
+flt_init == 0 ? ( flt_init = 1; flt_dirty = 1; );
+
+gfx_clear = 18 + 20 * 256 + 25 * 65536;
+gfx_a = 1;
+
+// ---------------- input bar ----------------
+gfx_set(0.60, 0.62, 0.67, 1); ft(10, 10, "INPUT", 1);
+opt(58, 6, 56, 22, "Root", S_INMODE, 0);
+opt(116, 6, 56, 22, "Degree", S_INMODE, 1);
+opt(174, 6, 56, 22, "Direct", S_INMODE, 2);
+opt(232, 6, 56, 22, "Auto", S_INMODE, 3);
+in_mode == 3 ? (
+  opt(302, 6, 100, 22, "Interchange", S_SUB, 0);
+  opt(404, 6, 84, 22, "Modulation", S_SUB, 1);
+  gfx_set(0.60, 0.62, 0.67, 1); ft(502, 10, "dist from", 1);
+  opt(562, 6, 62, 22, "Original", 34, 0);
+  opt(626, 6, 56, 22, "Current", 34, 1);
+  tog(696, 6, 84, 22, "Autoreset", 35);
+  btn(784, 6, 64, 22, "Reset", 0, 1) ? ( act = 1; );
+);
+gfx_set(0.60, 0.62, 0.67, 1); ft(872, 10, "Out ch", 1);
+stepper(912, 6, 90, 0, "", 36, 0, 16, 2, 0);
+
+// ---------------- header ----------------
+scale_title(#sc_title);
+strcpy(#sc_pos, ""); i = 0;
+loop(sc_n, sprintf(#tp, "%d ", A_SC[i]); strcat(#sc_pos, #tp); i += 1;);
+strcpy(#cn, ""); i = 0;
+loop(cm_n, note_name(A_CHM[i], #tn2); strcat(#cn, #tn2); strcat(#cn, "  "); i += 1;);
+strcpy(#cp, ""); i = 0;
+loop(ch_cnt, sprintf(#tp, "%d ", A_CH[i]); strcat(#cp, #tp); i += 1;);
+
+gfx_set(0.45, 0.47, 0.52, 1); ft(10, 36, "SCALE", 3);
+gfx_set(0.55, 0.78, 0.95, 1); strcpy(#hs, #sc_title); fit_head(#hs, 480, 2); ft(10, 48, #hs, 2);
+gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hp, #sc_pos); strcpy(#hp2, "positions: "); strcat(#hp2, #hp); fit_head(#hp2, 480, 1); ft(10, 76, #hp2, 1);
+gfx_set(0.45, 0.47, 0.52, 1); ft(510, 36, "CHORD", 3);
+gfx_set(0.93, 0.62, 0.28, 1); strcpy(#hc, #cn); cm_n == 0 ? strcpy(#hc, "-"); fit_head(#hc, 490, 2); ft(510, 48, #hc, 2);
+gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hq, "steps: "); strcat(#hq, #cp); fit_head(#hq, 490, 1); ft(510, 76, #hq, 1);
+in_mode == 0 ? strcpy(#ml, "Root: each held key sets its own root and plays its chord in the key's octave (polyphonic)");
+in_mode == 1 ? strcpy(#ml, "Degree: each held white key plays the chord of its degree (polyphonic, 0-127)");
+in_mode == 2 ? strcpy(#ml, "Direct: polyphonic pass-through");
+in_mode == 3 ? ( auto_sub == 0 ?
+  sprintf(#ml, "Auto / Modal Interchange: live mode rotation %d (baseline %d)", tx_mode, auto_base_rot) :
+  sprintf(#ml, "Auto / Modulation: transposition %d", auto_mod_t < 0 ? 0 : auto_mod_t); );
+gfx_set(0.45, 0.47, 0.52, 1); ft(10, 94, #ml, 3);
+gfx_set(0.60, 0.62, 0.67, 1); ft(690, 92, "Common notes", 1);
+opt(776, 90, 62, 16, "Hold", 38, 0);
+opt(840, 90, 74, 16, "Retrigger", 38, 1);
+
+draw_kbd(10, 110, 990, 52);
+
+// ---------------- panels ----------------
+PY = 170; PH = 354; PW = 240;
+section(10, PY, PW, PH, "1", "SCALE");
+section(260, PY, PW, PH, "2", "SCALE TRANSFORM");
+section(510, PY, PW, PH, "3", "CHORD");
+section(760, PY, PW, PH, "4", "CHORD TRANSFORM");
+
+// ----- 1 SCALE -----
+x = 18; w = 224;
+opt(x, 196, 43, 20, "Library", 1, 0);
+opt(x + 45, 196, 43, 20, "Euclid", 1, 1);
+opt(x + 90, 196, 43, 20, "C-D", 1, 2);
+opt(x + 135, 196, 43, 20, "Deep", 1, 3);
+opt(x + 180, 196, 44, 20, "Custom", 1, 4);
+sc_src == 0 ? (
+  // category selector
+  btn(x, 222, 22, 20, "<", 0, 1) ? ( set_sl_ui(2, max(0, sc_cat - 1)); strlen(#filter) == 0 ? ( flt_dirty = 1; ); );
+  btn(x + w - 22, 222, 22, 20, ">", 0, 1) ? ( set_sl_ui(2, min(8, sc_cat + 1)); strlen(#filter) == 0 ? ( flt_dirty = 1; ); );
+  gfx_set(0.18, 0.20, 0.25, 1); fr(x + 24, 222, w - 48, 20);
+  gfx_set(0.95, 0.94, 0.90, 1);
+  strlen(#filter) == 0 ? ( c = floor(sc_cat + 0.5); strcpy(#cat_s, "Category"); ) : strcpy(#cat_s, "All categories");
+  strlen(#filter) == 0 ? (
+    c = floor(sc_cat + 0.5);
+    c == 0 ? strcpy(#cat_s, "Major and minor"); c == 1 ? strcpy(#cat_s, "European"); c == 2 ? strcpy(#cat_s, "Asian");
+    c == 3 ? strcpy(#cat_s, "Indian"); c == 4 ? strcpy(#cat_s, "Pentatonic"); c == 5 ? strcpy(#cat_s, "Modal");
+    c == 6 ? strcpy(#cat_s, "Jazz"); c == 7 ? strcpy(#cat_s, "Symmetric"); c == 8 ? strcpy(#cat_s, "Misc");
+  );
+  ftc(x + 24, 222, w - 48, 20, #cat_s, 1);
+  // search field
+  strcpy(#tfshow, #filter); strlen(#filter) == 0 ? strcpy(#tfshow, "search...");
+  tf_id == 4 ? strcpy(#tfshow, #filter);
+  tf_run(4, x, 248, w - 22, 20, 1);
+  tf_id == 4 ? ( strcmp(#filter, #tfbuf) != 0 ? ( strcpy(#filter, #tfbuf); flt_dirty = 1; ); );
+  btn(x + w - 20, 248, 20, 20, "x", 0, 1) ? ( strcpy(#filter, ""); strcpy(#tfbuf, ""); flt_dirty = 1; tf_id == 4 ? ( tf_id = 0; ); );
+  flt_dirty ? flt_build();
+  // list
+  ly = 274; lh = 17;
+  lst_off = max(0, min(lst_off, max(0, flt_n - LST_VIS)));
+  hit(x, ly, w, lh * LST_VIS) && wheel != 0 ? ( lst_off = max(0, min(flt_n - LST_VIS, lst_off - (wheel > 0 ? 3 : -3))); wheel = 0; );
+  cur_lib = M_CATS[floor(sc_cat + 0.5)] + min(floor(sc_idx + 0.5), M_CATN[floor(sc_cat + 0.5)] - 1);
+  gfx_set(0.07, 0.08, 0.10, 1); fr(x, ly, w, lh * LST_VIS);
+  r = 0;
+  loop(LST_VIS,
+    k = lst_off + r;
+    k < flt_n ? (
+      gi = A_FLT[k];
+      hv = hit(x, ly + r * lh, w - 9, lh);
+      (sc_src == 0 && gi == cur_lib) ? ( gfx_set(0.93, 0.62, 0.28, 1); fr(x, ly + r * lh, w - 9, lh); gfx_set(0.08, 0.09, 0.11, 1); ) :
+      ( hv ? ( gfx_set(0.20, 0.23, 0.29, 1); fr(x, ly + r * lh, w - 9, lh); ); gfx_set(0.85, 0.85, 0.82, 1); );
+      lib_name(gi, #ln); fit_head(#ln, w - 18, 1); ft(x + 4, ly + r * lh + 2, #ln, 1);
+      (hv && mclick) ? (
+        cc = lib_cat_of(gi);
+        set_sl_ui(2, cc); set_sl_ui(3, gi - M_CATS[cc]); set_sl_ui(1, 0);
+      );
+    );
+    r += 1;
+  );
+  // scrollbar
+  gfx_set(0.14, 0.16, 0.20, 1); fr(x + w - 7, ly, 7, lh * LST_VIS);
+  flt_n > LST_VIS ? (
+    sb_h = max(14, lh * LST_VIS * LST_VIS / flt_n);
+    sb_y = ly + (lh * LST_VIS - sb_h) * lst_off / (flt_n - LST_VIS);
+    gfx_set(0.45, 0.47, 0.52, 1); fr(x + w - 7, sb_y, 7, sb_h);
+    (mclick && hit(x + w - 9, ly, 11, lh * LST_VIS)) ? ( act_id = 300; );
+    act_id == 300 ? ( mdown ? ( lst_off = max(0, min(flt_n - LST_VIS, floor((my - ly - sb_h / 2) / (lh * LST_VIS - sb_h) * (flt_n - LST_VIS) + 0.5))); ) : ( act_id = 0; ); );
+  );
+  gfx_set(0.45, 0.47, 0.52, 1);
+  sprintf(#cnt_s, "%d scales", flt_n); ft(x, ly + lh * LST_VIS + 3, #cnt_s, 3);
+) : sc_src == 4 ? (
+  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 224, "Positions (integers, mod 12)", 1);
+  list_str(1, #tfshow);
+  tf_run(1, x, 242, w, 22, 0) ? (
+    n = parse_list(#tfbuf, G_TMP, 0);
+    i = 0; loop(n, A_SCP[i] = G_TMP[i]; i += 1;);
+    list_set_len(1, n);
+  );
+  gfx_set(0.45, 0.47, 0.52, 1); ft(x, 270, "Type a list and press Enter, or use the", 3); ft(x, 282, "pitch-class cells below.", 3);
+) : (
+  sc_src == 3 ? ( stepper(x, 224, w, 100, "Events", 4, 1, 12, 0, 7); stepper(x, 250, w, 100, "Multiplicity", 5, 1, 23, 0, 7); ) :
+                ( stepper(x, 224, w, 100, "Events", 4, 1, 12, 0, 7); );
+  gfx_set(0.45, 0.47, 0.52, 1);
+  sc_src == 1 ? ( ft(x, 258, "Euclidean rhythm spread over 12 steps", 3); ) :
+  sc_src == 2 ? ( ft(x, 258, "Clough-Douthett maximally even set", 3); ) :
+                ( ft(x, 284, "Deep rhythm: i * multiplicity mod 12", 3); );
+);
+// base pitch-class set (before transforms)
+gfx_set(0.60, 0.62, 0.67, 1); ft(x, 484, "base scale", 3);
+bm = src_mask();
+sc_src == 4 ? (
+  pk = pc_row(x, 498, bm, 1);
+  pk >= 0 ? (
+    bm = bm + (bitv(bm, pk) ? -(2^pk) : 2^pk);
+    n = 0; i = 0; loop(12, bitv(bm, i) ? ( A_SCP[n] = i; n += 1; ); i += 1;);
+    list_set_len(1, n);
+  );
+) : ( pc_row(x, 498, bm, 0); );
+
+// ----- 2 SCALE TRANSFORM -----
+x = 268; w = 224;
+stepper(x, 196, w, 90, "Root", 6, 0, 11, 1, 0);
+stepper(x, 222, w, 90, "Mode", 7, 0, 11, 0, 0);
+stepper(x, 248, w, 90, "Degree", 8, -12, 12, 0, 0);
+tog(x, 274, 70, 20, "Invert", 9);
+stepper(x + 76, 274, w - 76, 40, "axis", 10, -12, 12, 0, 0);
+tog(x, 300, 107, 20, "Mirror", 11);
+tog(x + 117, 300, 107, 20, "Negative", 12);
+gfx_set(0.60, 0.62, 0.67, 1); ft(x, 340, "resulting scale", 3);
+pc_row(x, 354, scale_pcm, 0);
+gfx_set(0.45, 0.47, 0.52, 1);
+sprintf(#t2, "%d notes", sc_n); ft(x, 380, #t2, 3);
+ft(x, 404, "Order of operations:", 3);
+ft(x, 418, "root > mode > degree > invert >", 3);
+ft(x, 430, "mirror > negative", 3);
+ft(x, 454, "drag a value, scroll, click left/right", 3);
+ft(x, 466, "of it to step, right-click to reset", 3);
+
+// ----- 3 CHORD -----
+x = 518; w = 224;
+stepper(x, 196, w, 90, "Octave", 13, 0, 9, 0, 4);
+gfx_set(0.60, 0.62, 0.67, 1); ft(x, 226, "Criterion", 1);
+opt(x + 70, 222, 76, 20, "Position", 14, 0);
+opt(x + 148, 222, 76, 20, "Interval", 14, 1);
+cr_type == 0 ? (
+  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 248, "Degrees (integers >= 0)", 1);
+  list_str(2, #tfshow);
+  tf_run(2, x, 266, w, 22, 0) ? (
+    n = parse_list(#tfbuf, G_TMP, 1);
+    i = 0; loop(n, A_CRP[i] = G_TMP[i]; i += 1;);
+    list_set_len(2, n);
+  );
+  chips(x, 294, 2, 0);
+) : (
+  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 248, "Interval steps (any integers)", 1);
+  list_str(3, #tfshow);
+  tf_run(3, x, 266, w, 22, 0) ? (
+    n = parse_list(#tfbuf, G_TMP, 0);
+    i = 0; loop(n, A_CRI[i] = G_TMP[i]; i += 1;);
+    list_set_len(3, n);
+  );
+  chips(x, 294, 3, -1000);
+);
+gfx_set(0.45, 0.47, 0.52, 1); ft(x, 364, "chips: click +1, right-click -1, shift-click delete", 3);
+stepper(x, 382, w, 90, "Degree", 15, -72, 80, 0, 0);
+stepper(x, 408, w, 90, "Rotation", 16, -12, 12, 0, 0);
+stepper(x, 434, w, 90, "Voices (0=all)", 17, 0, 32, 0, 0);
+gfx_set(0.45, 0.47, 0.52, 1); ft(x, 462, "max 64 entries per list", 3);
+
+// ----- 4 CHORD TRANSFORM -----
+x = 768; w = 224;
+stepper(x, 196, w, 90, "Position", 18, -12, 12, 0, 0);
+stepper(x, 222, w, 90, "Offset", 19, -24, 24, 0, 0);
+stepper(x, 248, w, 90, "Mode", 20, 0, 11, 0, 0);
+tog(x, 274, 70, 20, "Invert", 21);
+stepper(x + 76, 274, w - 76, 40, "axis", 22, -12, 12, 0, 0);
+tog(x, 300, 107, 20, "Mirror", 23);
+tog(x + 117, 300, 107, 20, "Negative", 24);
+tog(x, 326, 107, 20, "Close", 25);
+tog(x + 117, 326, 107, 20, "Spread", 26);
+tog(x + 117, 352, 107, 20, "top cluster", 27);
+tog(x, 378, 70, 20, "Resize", 28);
+stepper(x + 76, 378, 72, 12, "s", 29, -24, 24, 0, 0);
+stepper(x + 152, 378, 72, 12, "e", 30, -24, 24, 0, 3);
+tog(x, 410, 107, 20, "Auto-voice", 31);
+btn(x + 117, 410, 107, 20, "Reset memory", 0, 1) ? ( act = 2; );
+gfx_set(0.45, 0.47, 0.52, 1);
+ft(x, 444, "order: position > offset > mode >", 3);
+ft(x, 456, "invert > mirror > close > spread >", 3);
+ft(x, 468, "resize > auto-voicing", 3);
+
+// text field housekeeping
+tf_seen == 0 ? ( tf_id = 0; );
+last_cap = mouse_cap;
+
+
+
