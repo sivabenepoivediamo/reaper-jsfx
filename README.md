@@ -12,6 +12,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 | Maestro FZ-1 Fuzz-Tone | `Maestro FZ-1 Fuzz Tone.jsfx` | Audio | Three-stage germanium-style fuzz inspired by the Maestro FZ-1 |
 | Dallas Arbiter Rangemaster Treble Booster | `Dallas Arbiter Rangemaster Treble Booster.jsfx` | Audio | Single-transistor germanium treble booster inspired by the Dallas Arbiter Rangemaster |
 | Boss CE-1 Chorus Ensemble | `Boss CE-1 Chorus Ensemble.jsfx` | Audio | BBD-style chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble |
+| Harmony | `Harmony.jsfx` | MIDI | Scale and chord engine: turns single notes into chords built from a transformable scale |
 
 More to come.
 
@@ -253,16 +254,223 @@ The sliders appear in four groups in this order: main controls (Mode to Vibrato 
 | Vibrato Rate Min (Hz) | 3.2 |
 | Vibrato Rate Max (Hz) | 11.6 |
 
+## Harmony
+
+A MIDI scale and chord engine. Each note you play is expanded into a chord that is built from a scale, and every step of that process is adjustable: the scale itself, a chain of transforms on the scale, the rule that picks the chord notes, and a chain of transforms on the chord. It is a port of the "pitchwheel" web tool.
+
+Unlike Block Chords, which harmonizes a melody, Harmony treats each key as a command. Depending on the **Input** mode, the key sets the root, picks a scale degree, or lets the plugin work out which scale you are playing in.
+
+The effect has its own editor that scales to fit the window. A keyboard strip above the panels shows the live scale (blue), the current chord (orange) and the keys you are holding.
+
+### How it works
+
+The chord is built in four stages, one panel each in the editor:
+
+1. **Scale:** a base scale from the library, a generator or your own list.
+2. **Scale transform:** Root, Mode, Degree, Invert, Mirror and Negative, applied in that order. The result is the live scale.
+3. **Chord:** a rule that picks notes from the live scale (a list of scale degrees or of interval steps), the degree it starts on, a rotation and a number of voices.
+4. **Chord transform:** Position, Offset, Mode, Invert, Mirror, Close, Spread, Resize and Auto-voicing, applied in that order. Chord **Negative** acts earlier, on the scale the chord is picked from.
+
+Chord tones that would fall outside MIDI notes 0 to 127 are dropped. All other MIDI messages pass through untouched. All-notes-off and all-sound-off (CC 123 and 120) stop every chord.
+
+#### Scale sources
+
+- **Library:** 402 scales in nine categories (Major and minor, European, Asian, Indian, Pentatonic, Modal, Jazz, Symmetric, Misc), with a search box that filters across all categories. The scale library comes from Francesco Balena's *The Scale Omnibus* (see Credits).
+- **Euclid:** a Euclidean rhythm with **Events** onsets spread over 12 steps, used as a scale.
+- **C-D:** the Clough-Douthett maximally even set of **Events** notes in 12.
+- **Deep:** a deep rhythm, with notes at *i* x **Multiplicity** (mod 12) for *i* below **Events**.
+- **Custom:** your own list of positions (mod 12). Type the list and press Enter, or click the twelve pitch-class cells.
+
+#### Scale transforms
+
+- **Root:** transposes the scale to C through B.
+- **Mode:** keeps the root and rotates the interval pattern, so C major becomes C Dorian, C Phrygian and so on. Values above the number of notes in the scale wrap around.
+- **Degree:** keeps the same notes and starts them from another degree, so C major becomes D Dorian, E Phrygian and so on (the relative mode).
+- **Invert:** reverses the order of the intervals on either side of the **axis** point.
+- **Mirror:** reads the scale in the opposite direction.
+- **Negative:** negative harmony. Every note is reflected across the axis that sits halfway between the root and its fifth.
+
+#### Chord rule
+
+- **Position** criterion: a list of scale degrees (integers from 0 up). The default `0 2 4` is a triad.
+- **Interval** criterion: a list of steps in scale degrees, stacked one on top of the next. The default `2` stacks thirds.
+- **Degree:** the scale degree the chord is built on.
+- **Rotation:** starts the criterion list from a different entry, which gives rule-based inversions.
+- **Voices:** the number of notes. 0 uses the length of the criterion list, and a larger number keeps going up the scale.
+- **Octave:** the register of the chord (see Root mode below for how it combines with the key you play).
+
+#### Chord transforms
+
+| Transform | What it does |
+| --- | --- |
+| Position | Inverts the chord by that many notes, up for positive and down for negative |
+| Offset | Transposes the chord by that many semitones |
+| Mode | Rotates the chord's interval pattern while keeping the lowest note |
+| Invert | Flips the chord upside down around the chosen chord tone (**axis**) |
+| Mirror | Reverses the order of the chord's intervals |
+| Negative | Picks the chord from the negative-harmony version of the scale |
+| Close | Folds the chord into one octave, the one that already holds most of its notes |
+| Spread | Opens the voicing: neighbouring notes end up at least a whole tone apart at the bottom, growing to a fourth at the top. **Top cluster** lets the highest notes sit close together |
+| Resize | Replaces the chord with notes **s** to **e** of its octave-repeating series, so the chord can get bigger, smaller or run downward (if s is greater than e) |
+| Auto-voicing | Picks the inversion and octave closest to the previous chord, for smooth voice leading |
+
+Auto-voicing remembers the previous chord. **Reset memory** forgets it, so the next chord is voiced from scratch.
+
+### Input modes
+
+- **Root:** each key sets the scale root to its pitch class and plays that chord. The chord sits in the octave of the key you play, so there is no octave looping: a C one octave higher gives a chord one octave higher. The **Chord Octave** setting is relative to that, with the octave of middle C as the reference. At the default of 4, a middle C gives a chord rooted on C4, and 5 puts the chord an octave above the key.
+- **Degree:** white keys play the chords of consecutive scale degrees, starting at middle C as degree 0 (C = 0, D = 1, E = 2 and so on, seven degrees per octave). **Chord Octave** moves the starting key. Black keys are ignored.
+- **Direct:** notes pass through unchanged, still polyphonic. Use it when you want the keyboard to play normally.
+- **Auto:** you just play, and the plugin finds the scale. See below.
+
+In every mode except Direct, each held key owns its own chord. The scale root, degree and mode follow the most recently pressed key, while the chords of the other held keys keep sounding.
+
+### Auto mode
+
+In Auto mode the plugin looks at all the keys you are holding. If they all belong to the live scale, the scale stays as it is. If not, it looks for the closest scale that contains them all and switches to it. The chord is then built on the scale degree of the key you pressed last, in that key's octave. "Closest" is measured as the total semitone distance between the two scales' notes. If no candidate contains every held note, the scale is left alone.
+
+The **Sub-mode** decides what can change:
+
+- **Modal Interchange:** the scale is rotated through its own modes. The candidates are the modes of the scale you started with, all on the same root (C major, C Dorian and so on).
+- **Modulation:** the scale keeps its mode and is transposed. All twelve transpositions are candidates.
+
+**Distance From** decides what "closest" is measured against:
+
+- **Original:** the initial scale (see below).
+- **Current:** the scale that is sounding right now. This is the default, and it makes the scale drift by small steps as you play.
+
+The **initial scale** is the mode, transposition and chord degree you had when you switched to Auto. Changing the **Mode** slider by hand while in Auto sets a new initial scale, and so does changing the **Root** in Modulation.
+
+Three things return you to the initial scale:
+
+- The **Reset** button (or the **Reset Auto** action), which also stops the sounding chords.
+- **Autoreset**, when on: it resets whenever you press a key while no other key is held, before the scale is chosen.
+- Leaving Auto mode, or switching the Sub-mode.
+
+### Usage
+
+1. Put the effect on a MIDI track, before your instrument.
+2. Pick a scale in the **Scale** panel. Use the category arrows and the list, or the search box, or switch the source to Euclid, C-D, Deep or Custom.
+3. Choose an **Input** mode and play. In Root mode every key is a root. In Degree mode the white keys walk up the scale. In Auto mode just play in any key.
+4. Shape the chord with the **Chord** panel (the rule and the number of voices) and the **Chord Transform** panel (inversions, spreading, voice leading and so on).
+
+The values in the editor can be dragged or scrolled. Clicking the left or right half of a value steps it down or up, and right-click sets it back to its default. In the chord rule, each number in a list is a chip: click to add 1, right-click to subtract 1, shift-click to delete, and use the `+` chip to add an entry. Lists are limited to 64 entries.
+
+When more than one chord holds the same note, the note is reference-counted, as in Block Chords: releasing one chord never cuts off a note another chord is still using. **Common Notes** decides what happens when a new chord shares a note with one that is already sounding: **Hold** keeps the note going without a new note-on (legato), **Retrigger** plays it again.
+
+### Controls
+
+All of these are sliders, so they can be automated. **Input**:
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Input: Mode | Root, Degree, Direct, Auto | How a played key drives the chord |
+| Input: Auto Sub-mode | Modal Interchange, Modulation | What Auto mode is allowed to change |
+| Input: Auto Distance From | Original, Current | What Auto mode measures the closest scale against |
+| Input: Auto Autoreset | Off, On | Return to the initial scale on every fresh key press |
+| Input: Common Notes | Hold, Retrigger | What happens to a note that two chords share |
+| Output Channel | Same as input, 1 to 16 | MIDI channel of the output notes |
+| Action | -, Reset Auto, Reset Voice-Leading | Momentary actions (these are the **Reset** and **Reset memory** buttons) |
+
+**Scale**:
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Scale: Source | Library, Euclidean, Clough-Douthett, Deep, Custom | Where the base scale comes from |
+| Scale: Library Category | 9 categories | Category of the library scale |
+| Scale: Library Index | 0 to 159 | Position in the category (limited to the category's size) |
+| Scale: Generator Events | 1 to 12 | Number of notes for Euclid, C-D and Deep |
+| Scale: Generator Multiplicity | 1 to 23 | Deep only: the step multiplier |
+
+**Scale transform** (applied in this order):
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Scale TX: Root | C to B | Transposes the scale |
+| Scale TX: Mode | 0 to 11 | Rotates the interval pattern on the same root |
+| Scale TX: Degree | -12 to +12 | Starts the same notes from another degree |
+| Scale TX: Invert | Off, On | Reverses the intervals around the axis |
+| Scale TX: Invert Axis | -12 to +12 | Where the inversion splits the interval pattern |
+| Scale TX: Mirror | Off, On | Reads the scale in the opposite direction |
+| Scale TX: Negative | Off, On | Negative harmony around the root-and-fifth axis |
+
+**Chord**:
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Chord: Octave | 0 to 9 | Register of the chord. In Root mode it is relative to the octave of the key |
+| Chord: Criterion Type | Position, Interval | Whether the rule is a list of degrees or a list of steps |
+| Chord: Degree | -72 to +80 | Scale degree the chord is built on |
+| Chord: Rotation | -12 to +12 | Starts the rule's list from a different entry |
+| Chord: Voices | 0 to 32 | Number of notes. 0 uses the length of the list |
+
+**Chord transform** (applied in this order, with Negative acting on the scale before the chord is picked):
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Chord TX: Position | -12 to +12 | Chord inversion, in notes |
+| Chord TX: Offset | -24 to +24 | Transposition, in semitones |
+| Chord TX: Mode | 0 to 11 | Rotates the chord's interval pattern |
+| Chord TX: Invert | Off, On | Flips the chord around the axis note |
+| Chord TX: Invert Axis | -12 to +12 | Which chord tone the flip is centred on |
+| Chord TX: Mirror | Off, On | Reverses the order of the chord's intervals |
+| Chord TX: Negative | Off, On | Picks the chord from the negative-harmony scale |
+| Chord TX: Close | Off, On | Folds the chord into one octave |
+| Chord TX: Spread | Off, On | Opens the voicing |
+| Chord TX: Spread Top Cluster | Off, On | Lets the top notes of a spread chord sit close together |
+| Chord TX: Resize | Off, On | Replaces the chord with notes Start to End of its series |
+| Chord TX: Resize Start | -24 to +24 | First note of the resized chord |
+| Chord TX: Resize End | -24 to +24 | Last note of the resized chord |
+| Chord TX: Auto-voicing | Off, On | Smooth voice leading from the previous chord |
+
+The chord rule lists (degrees, interval steps) and the custom scale are not sliders, but they are saved with the project and with FX presets. The search box in the library list is not saved.
+
+The 38 sliders appear in this order: Scale source (5), Scale transform (7), Chord (5), Chord transform (14), then Input and Output (7). Reordering them changes how saved presets and automation map to the controls.
+
+### Defaults
+
+| Setting | Default |
+| --- | --- |
+| Input: Mode | Root |
+| Input: Auto Sub-mode | Modal Interchange |
+| Input: Auto Distance From | Current |
+| Input: Auto Autoreset | Off |
+| Input: Common Notes | Hold |
+| Output Channel | Same as input |
+| Scale: Source | Library |
+| Scale: Library | Major and minor, Ionian (Major) |
+| Scale: Generator Events | 7 |
+| Scale: Generator Multiplicity | 7 |
+| Custom scale | 0 2 4 5 7 9 11 |
+| Scale TX: Root | C |
+| Scale TX: Mode, Degree, Invert Axis | 0 |
+| Scale TX: Invert, Mirror, Negative | Off |
+| Chord: Octave | 4 |
+| Chord: Criterion Type | Position |
+| Chord: Position list | 0 2 4 |
+| Chord: Interval list | 2 |
+| Chord: Degree, Rotation | 0 |
+| Chord: Voices | 0 (the length of the list) |
+| Chord TX: Position, Offset, Mode, Invert Axis | 0 |
+| Chord TX: Invert, Mirror, Negative, Close, Spread, Top Cluster, Resize, Auto-voicing | Off |
+| Chord TX: Resize Start, End | 0, 3 |
+
+With these defaults every key plays a major triad built on itself, in the octave of the key.
+
 ## Installation
 
 1. In REAPER, open **Options > Show REAPER resource path in explorer/finder**.
 2. Copy the `.jsfx` file into the `Effects` folder (or a subfolder of it).
 3. In the FX browser, press **F5** to refresh, or restart REAPER.
 4. Add the effect to a track:
-   - **JS: Block Chords (melody harmonizer)** on a MIDI track
+   - **JS: Block Chords (melody harmonizer)** or **JS: Harmony (scale/chord MIDI processor)** on a MIDI track
    - **JS: Maestro FZ-1 Fuzz-Tone**, **JS: Dallas Arbiter Rangemaster Treble Booster**, **JS: Boss CE-1 Chorus Ensemble** on an audio track
 
 REAPER stores slider values with the project and with FX presets. If you change the defaults in the file and an existing instance still shows the old values, add a fresh instance.
+
+## Credits
+
+- The scale library in **Harmony** (the scales and their names) comes from Francesco Balena, *The Scale Omnibus*.
 
 ## Contributing
 
