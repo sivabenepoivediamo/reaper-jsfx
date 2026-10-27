@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>reaper-jsfx: JSFX experiments for REAPER</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fff;--surface:#f5f5f4;--ink:#0a0a0a;--mid:#444440;--muted:#6f6f68;--faint:#e8e8e4;--line:#e0e0dc;--radius:10px;color-scheme:light}
+[data-theme=dark]{--bg:#0d0d0d;--surface:#161616;--ink:#f0f0ec;--mid:#a4a49d;--muted:#77776f;--faint:#232320;--line:#2a2a26;color-scheme:dark}
+*,*::before,*::after{box-sizing:border-box}
+html{font-size:15px;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.65 'DM Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;transition:background .3s,color .3s;min-height:100vh}
+.wrap{max-width:1088px;margin:0 auto;padding:0 24px 100px}
+.top{display:flex;justify-content:flex-end;padding:18px 0 0}
+.ctrl{font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.06em;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer}
+.ctrl:hover{color:var(--ink);border-color:var(--muted)}
+h1,h2,h3{font-family:'DM Sans',system-ui,sans-serif;line-height:1.15}
+h1{font-size:clamp(40px,7vw,68px);font-weight:700;letter-spacing:-.03em;text-transform:uppercase;margin:36px 0 12px;line-height:1}
+h1 .dim{color:var(--muted)}
+h2{font-size:1.6rem;font-weight:600;letter-spacing:-.025em;margin:.5rem 0 .6rem}
+h3{font-size:.7rem;font-weight:500;font:500 10px/1.2 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:1.8rem 0 .6rem}
+.lead{font-size:1rem;color:var(--mid);max-width:58ch;margin:0 0 .6rem}
+main>p{color:var(--mid);max-width:58ch;font-size:.93rem}
+a{color:var(--ink);text-decoration-color:var(--muted);text-underline-offset:3px}
+a:hover{text-decoration-color:var(--ink)}
+code,kbd{font:400 .85em 'IBM Plex Mono',ui-monospace,monospace;background:var(--faint);padding:.12em .4em;border-radius:4px}
+main{min-height:90vh}
+nav{position:sticky;top:0;z-index:5;background:var(--bg);display:flex;flex-wrap:wrap;gap:5px;margin:20px 0 0;padding:12px 0;border-bottom:1px solid var(--line)}
+.nav-pill{white-space:nowrap;font:400 10px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:var(--mid);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:9px 16px;transition:color .15s,border-color .15s,background .15s}
+.nav-pill:hover{color:var(--ink);border-color:var(--muted);background:var(--surface)}
+.nav-pill.active{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+section.p{border:1px solid var(--line);border-radius:var(--radius);padding:32px 30px 26px;margin:24px 0 0}
+.js section.p{display:none}.js section.p.on{display:block}
+.tag{display:inline-block;font:400 9px/1 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;padding:5px 9px;border-radius:4px;background:var(--faint);color:var(--mid)}
+.btn{display:inline-block;background:var(--ink);color:var(--bg);padding:11px 20px;border-radius:999px;text-decoration:none;font:500 11px/1.2 'IBM Plex Mono',monospace;letter-spacing:.06em;margin:.5rem .5rem .5rem 0;border:1px solid var(--ink);transition:background .15s,color .15s}
+.btn.o{background:none;color:var(--ink)}.btn.o:hover{background:var(--ink);color:var(--bg)}.btn.s{padding:7px 12px;margin:0 .3rem 0 0;font-size:10px}
+.btn:hover{background:none;color:var(--ink)}
+.btn:focus-visible,a:focus-visible,summary:focus-visible,.nav-pill:focus-visible,.ctrl:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+details{border-top:1px solid var(--line);margin-top:1.4rem;padding-top:.5rem}
+summary{cursor:pointer;font:500 11px/1.2 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;padding:.7rem 0;color:var(--mid)}
+details[open]>summary,summary:hover{color:var(--ink)}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius)}
+table{border-collapse:collapse;width:100%;font-size:.88rem;margin:0}
+th,td{text-align:left;padding:.6rem .9rem;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+th{font:500 9px/1.2 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:var(--surface)}
+td:first-child{white-space:nowrap;font-weight:600}
+td{color:var(--mid)}td:first-child{color:var(--ink)}
+ul,ol{padding-left:1.3rem;color:var(--mid)}li{margin:.3rem 0}
+li b,p b{color:var(--ink);font-weight:600}
+.note{border:1px solid var(--line);background:var(--surface);border-radius:var(--radius);padding:.8rem 1rem;color:var(--mid);font-size:.9rem;margin:1.2rem 0}
+footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:400 10px/1.6 'IBM Plex Mono',monospace;letter-spacing:.04em;color:var(--muted)}
+@media(max-width:560px){section.p{padding:24px 18px}nav{flex-wrap:nowrap;overflow-x:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="top"><button class="ctrl" id="theme" aria-label="Toggle light and dark theme">☀</button></div>
+<main>
+<h1>reaper<span class="dim"> jsfx</span></h1>
+<p class="lead">Experiments with JSFX, REAPER's scripting format for audio and MIDI effects. Two MIDI harmony tools and three pedal-inspired audio effects, each in a single file you can copy into REAPER.</p>
+<p>This is a personal playground, so expect rough edges. Ideas and bug reports are welcome: open an issue if something sounds wrong.</p>
+<nav aria-label="Sections"><a class="nav-pill" href="#install">Install</a><a class="nav-pill" href="#download">Download</a><a class="nav-pill" href="#block-chords">Block Chords</a><a class="nav-pill" href="#fz1">Maestro FZ-1</a><a class="nav-pill" href="#rangemaster">Rangemaster</a><a class="nav-pill" href="#ce1">Boss CE-1</a><a class="nav-pill" href="#harmony">Harmony</a><a class="nav-pill" href="#dev">Dev notes</a></nav>
+
+<section id="install" class="p">
+<h2>Install</h2>
+<ol>
+<li>Get the <code>.jsfx</code> files you want from the Download tab or from each effect's tab.</li>
+<li>In REAPER, open <b>Options &gt; Show REAPER resource path in explorer/finder</b>.</li>
+<li>Copy the files into the <code>Effects</code> folder (or a subfolder of it).</li>
+<li>In the FX browser press <kbd>F5</kbd> to refresh, or restart REAPER.</li>
+<li>Add the effect to a track. MIDI effects go on a track before the instrument and are meant to work with realtime polyphonic MIDI input. Audio effects go on a track with some audio content.</li>
+</ol>
+<p class="note">REAPER stores slider values with the project and with FX presets. If you change defaults in a file and an old instance still shows the old values, add a fresh instance. Reordering sliders changes how saved presets and automation map to controls.</p>
+</section>
+
+<section id="download" class="p">
+<span class="tag">Download</span>
+<h2>Download</h2>
+<p>Get every effect at once, or pick single files. After downloading, follow the Install steps.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/archive/refs/heads/main.zip">Download all (ZIP)</a><a class="btn o" href="https://github.com/sivabenepoivediamo/reaper-jsfx">Open the repository</a>
+<h3>Single files</h3>
+<div class="tw"><table>
+<tr><th>Effect<th>Type<th>File
+<tr><td>Block Chords<td>MIDI<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Block%20Chords.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Block%20Chords.jsfx">View source</a>
+<tr><td>Maestro FZ-1 Fuzz-Tone<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">View source</a>
+<tr><td>Dallas Arbiter Rangemaster Treble Booster<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">View source</a>
+<tr><td>Boss CE-1 Chorus Ensemble<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">View source</a>
+<tr><td>Harmony<td>MIDI<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Harmony.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Harmony.jsfx">View source</a>
+</table></div>
+<p class="note">If a file opens as text in the browser, use Save link as, or save the page with <kbd>Ctrl</kbd>+<kbd>S</kbd>, and keep the <code>.jsfx</code> extension.</p>
+</section>
+
+<!-- ============ BLOCK CHORDS ============ -->
+<section id="block-chords" class="p m">
+<span class="tag">MIDI effect</span>
+<h2>Block Chords</h2>
+<p>Turns single-note melodies into block chords. Every note you play is treated as the top voice of the melody. A port of the "blockchords" web tool.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Block%20Chords.jsfx">Download Block Chords.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put the effect on a MIDI track, before your instrument.</li><li>Pick a <b>root</b>, a <b>scale</b> and a <b>base shape</b>.</li><li>Play single notes. Each one comes out as a chord.</li></ol>
+<h3>How a note is harmonized</h3>
+<ul>
+<li><b>Notes in the base shape</b> use the inversion of that shape that puts the melody note on top.</li>
+<li><b>Other scale degrees</b> get descending thirds along the scale. A voice that would form a tritone with the melody moves up one scale step.</li>
+<li><b>Notes outside both</b> are treated as a chromatic alteration of the nearest in-scale note. You choose whether the whole chord moves with it or only the melody note.</li>
+<li><b>Bass doubling</b> adds the melody an octave below. <b>Drop 2 / 3 / 4</b> move the second, third or fourth voice an octave below that doubling.</li>
+</ul>
+<p>Overlapping chords share notes safely: releasing one chord never cuts a note another chord still holds. Notes outside the harmonize range pass through unchanged.</p>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>What it does
+<tr><td>Root (key)<td>C to B. Applies to both the scale and the base shape.
+<tr><td>Scale category + list<td>Pick a category, then a scale in the matching list. Categories: major and minor modes, European, Asian, Indian (three lists), pentatonic, modal (two lists), jazz, symmetric, misc.
+<tr><td>Custom scale toggles<td>Choose <b>Custom</b> as the category to reveal 12 toggles (relative to the root).
+<tr><td>Base shape category + list<td>Triads, sixths, sevenths, ninths, elevenths, thirteenths, altered dominants, suspended and added tone, symmetric and cluster, polychords and hybrids, classical chromatic harmony.
+<tr><td>Custom shape toggles<td>Choose <b>Custom</b> as the shape category for 12 toggles.
+<tr><td>Drop voice 2 / 3 / 4<td>Drops that voice an octave below the bass doubling.
+<tr><td>Out-of-scale notes: transpose whole chord<td>On: the chord moves with the alteration. Off: only the melody note changes.
+<tr><td>Bass doubling<td>Adds the melody an octave below.
+<tr><td>Harmony velocity<td>10 to 150% of the melody velocity.
+<tr><td>Harmonize from / up to<td>MIDI note range that gets harmonized. Others pass through.
+</table></div>
+<p><b>Defaults:</b> root C, Ionian (Major), Major Sixth (6), velocity 85%, range 60 to 127, transpose whole chord on, bass doubling on, drops off.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Slider map:</b> 1 root, 2 scale category, 3 to 14 one picker per scale category (12 groups, <code>SB = 3</code>), 15 to 26 custom scale toggles (<code>CSB = 15</code>), 27 shape category (<code>CGRP</code>), 28 to 38 one picker per shape category (<code>HB = 28</code>), 39 to 50 custom shape toggles (<code>CHB = 39</code>), 51 to 53 drops, 54 transpose, 55 bass doubling, 56 velocity, 57 and 58 range. <code>@slider</code> hides the pickers that do not apply with <code>slider_show</code>.</li>
+<li><b>Library format:</b> each scale or shape is a 12-bit mask (bit <em>b</em> set means <em>b</em> semitones above the root). Masks are loaded with <code>ls()</code> and <code>lh()</code> in <code>@init</code> into <code>LS</code> (1000) and <code>LH</code> (2000). <code>GSS[]</code> and <code>GSC[]</code> hold the first library index of each category.</li>
+<li><b>Adding a scale:</b> insert the mask with <code>ls()</code> at the end of its category, shift the later <code>GSS</code> entries, then raise that picker's slider range and add its name in the slider definition. The list order must match the mask order.</li>
+<li><b>Core functions:</b> <code>harm_shape()</code> builds the inversion with the melody on top. <code>step_scale()</code> moves a note by scale steps and returns -9999 if the note is not in the scale. <code>harmonize()</code> assembles <code>OUT[]</code> including alteration, bass doubling and drops.</li>
+<li><b>Note bookkeeping:</b> <code>CNT[ch*128+note]</code> counts the chord notes per held input note. <code>STORE</code> keeps up to 8 output pitches per input note. <code>REFC</code> reference-counts output pitches: a note-on resends a note-off first if the count is above 0, and a note-off is sent only when the count returns to 0. CC 120 and 123 clear the counters for that channel.</li>
+<li>Named strings are not accessible inside functions, so string handles (<code>NMS</code>, <code>CHS</code>) are assigned in <code>@init</code> and used as globals.</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ FZ-1 ============ -->
+<section id="fz1" class="p">
+<span class="tag">Audio effect</span>
+<h2>Maestro FZ-1 Fuzz-Tone</h2>
+<p>A stereo fuzz inspired by the Maestro FZ-1. The two channels are processed independently, so it works on mono or stereo tracks.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">Download Maestro FZ-1 Fuzz Tone.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put it on an audio track, ideally first in the chain so it sees the raw instrument.</li><li>Set <b>Fuzz</b> for the amount and <b>Volume</b> to match your level.</li><li>Shape the sound with <b>Bias</b>, <b>Tone</b> and <b>Sag</b>.</li></ol>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>Range<th>What it does
+<tr><td>Fuzz<td>0 to 100<td>Drive. Raises the first-stage gain from -6 dB to +44 dB and lowers the pre-clip low-pass from 9 kHz to 4 kHz.
+<tr><td>Volume (dB)<td>-40 to +12<td>Level of the processed signal.
+<tr><td>Bias<td>0 to 100<td>DC offset ahead of the clippers, for more asymmetric clipping. High settings get ragged and can starve the signal.
+<tr><td>Tone<td>0 to 100<td>Output low-pass from about 1 kHz to 12 kHz.
+<tr><td>Sag<td>0 to 100<td>Level-dependent bias drop in the second stage. Loud passages compress and thin out, and notes can sputter as they decay.
+<tr><td>Mix (%)<td>0 to 100<td>Dry/wet blend. Volume only affects the wet signal.
+</table></div>
+<p><b>Defaults:</b> Fuzz 60, Volume -12 dB, Bias 35, Tone 50, Sag 25, Mix 100.</p>
+<h3>Signal path</h3>
+<p>90 Hz input high-pass, first clipper, 250 Hz coupling high-pass, a low-pass that darkens with Fuzz, a second clipper with envelope-driven bias sag (about 2 ms attack, 150 ms release), tone low-pass, 20 Hz DC blocker. Both clippers are asymmetric: the positive half clips softly and the negative half has a lower ceiling, which adds even-order harmonics. The fuzz path runs at 2x oversampling.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Sliders:</b> 1 Fuzz, 2 Volume, 3 Bias, 4 Tone, 5 Sag, 6 Mix. All coefficients are computed in <code>@slider</code> at twice the sample rate (<code>fs2 = 2*srate</code>).</li>
+<li><b>Structure:</b> <code>fz()</code> is an instance function (state in <code>z1..z5</code>, <code>env</code>). Each channel is an instance (<code>chL</code>, <code>chR</code>) configured by <code>fz_set()</code>. Parameters are passed as arguments so both channels share the same coefficients.</li>
+<li><b>Nonlinearity:</b> <code>tanhf()</code> is a rational tanh approximation that is exactly +/-1 beyond |x| = 3. <code>ge()</code> uses it for the positive half and <code>0.7*tanhf(x/0.7)</code> for the negative half.</li>
+<li><b>Oversampling:</b> each input sample produces two fuzz outputs. The first uses the average of the previous and current input (linear interpolation), the second uses the input itself. A 4th-order Butterworth low-pass at 0.45 x <code>srate</code> (two biquads, Q 0.5412 and 1.3066, run at <code>fs2</code>) filters both. The first output is discarded after being run through the filter, and the second is the output sample.</li>
+<li><b>Sag:</b> the envelope follower tracks the post-filter signal and subtracts <code>sg*env</code> from the second stage's bias.</li>
+<li><b>Adding a control:</b> add a <code>sliderN</code> line at the end (so existing presets keep their mapping), compute its coefficient in <code>@slider</code>, and pass it through <code>fz_set()</code>.</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ RANGEMASTER ============ -->
+<section id="rangemaster" class="p">
+<span class="tag">Audio effect</span>
+<h2>Dallas Arbiter Rangemaster Treble Booster</h2>
+<p>A stereo treble booster inspired by the single germanium transistor pedal behind many 1960s and 70s lead tones.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">Download Dallas Arbiter Rangemaster Treble Booster.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put it on an audio track, first in the chain, before any amp sim or other drive.</li><li>Set <b>Range</b> for the boost and <b>Output</b> to match your level.</li><li>Shape the tone with <b>Input Cap</b> and <b>Hi-Cut</b>, and the clipping with <b>Bias</b>, <b>Germanium Asymmetry</b> and <b>Battery</b>.</li></ol>
+<p>At defaults the small-signal response runs from about -14 dB at 100 Hz to about +9 dB at 4 kHz. Very quiet signals (-40 dBFS or lower) stay fairly clean even at full Range, while a typical guitar DI (-20 to -10 dBFS) drives the stage much harder. If it is too clean, raise Input Trim, lower Battery or raise Bias. The graph shows the linear response only, so it does not react to Bias, Asymmetry, Battery or Warmth. Feed it a DI'd guitar: the interaction with a real pickup is not modelled.</p>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>Range<th>What it does
+<tr><td>Range<td>0 to 10<td>Stage gain, about -4 dB to +26 dB. Also sets how hard the transistor is driven.
+<tr><td>Input Cap (nF)<td>1 to 100<td>Input coupling cap. Stock is 5 nF. Try 10 to 47 nF for the "fuller" mod.
+<tr><td>Transistor hFE<td>30 to 150<td>Sets input impedance and so the input high-pass corner (higher hFE, lower corner), plus a slight gain change.
+<tr><td>Bias (%)<td>-50 to +50<td>Shifts the operating point. Away from 0 the half-waves clip unevenly. Positive and negative are mirror images.
+<tr><td>Germanium Asymmetry (%)<td>0 to 100<td>How much more headroom one half-wave has. 0 is symmetric.
+<tr><td>Battery (V)<td>4 to 9.6<td>Supply voltage. A weaker battery clips earlier and sounds more compressed.
+<tr><td>Hi-Cut (Hz)<td>2000 to 20000<td>One-pole low-pass after the clipper.
+<tr><td>Input Trim (dB)<td>-24 to +24<td>Level into the stage.
+<tr><td>Output (dB)<td>-36 to +12<td>Level out.
+<tr><td>Warmth (%)<td>0 to 100<td>Extra even-order harmonics.
+<tr><td>Oversampling<td>Off, 2x, 4x, 8x<td>Higher is cleaner and uses more CPU.
+</table></div>
+<p><b>Defaults:</b> Range 7, Input Cap 5 nF, hFE 75, Bias 0, Asymmetry 60, Battery 9 V, Hi-Cut 12000 Hz, Trim 0, Output -6 dB, Warmth 25, Oversampling 4x.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Sliders:</b> 1 Range, 2 Input Cap (log), 3 hFE, 4 Bias, 5 Asymmetry, 6 Battery, 7 Hi-Cut (log), 8 Trim, 9 Output, 10 Warmth, 11 Oversampling index (0 to 3, factor = 2^index).</li>
+<li><b>Memory map:</b> 0 to 14 oversampling filter coefficients (3 biquads x 5), 100+ upsampling states (6 per channel), 120+ downsampling states (6 per channel), 200+ one-pole states (8 per channel).</li>
+<li><b>Input network:</b> a one-pole high-pass with <code>rin = 59.4k || (hFE*500)</code> and the input cap. The corner is clamped to 0.45 x <code>srate</code>. Output coupling is 20 nF into 150k (about 53 Hz) and also removes the DC from asymmetric clipping.</li>
+<li><b>Clipper:</b> <code>sh(x, hpos, hneg)</code> is an asymmetric tanh saturator. Headroom <code>hp = 0.5*battery/9</code> and <code>hn = hp*(1 + 1.2*asym)</code>. <code>vb</code> shifts the operating point and <code>y0</code> is the static offset subtracted afterwards. Warmth adds <code>0.4*warm*v*v</code>.</li>
+<li><b>Oversampling:</b> zero-stuff by <code>osf</code> (input scaled by <code>osf</code>), filter with a 6th-order Butterworth made of three biquads (Q 0.5176, 0.7071, 1.9319) at <code>min(0.45*srate, 20000)</code>, clip, filter again and keep the first output of each group. IIR filters, so no latency is reported.</li>
+<li><b>Smoothing:</b> gain and output are smoothed with a 10 ms one-pole to avoid zipper noise.</li>
+<li>The component values were tuned by ear. Change them in <code>@slider</code> (the <code>rin</code>, <code>fc_out</code> and headroom lines).</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ CE-1 ============ -->
+<section id="ce1" class="p">
+<span class="tag">Audio effect</span>
+<h2>Boss CE-1 Chorus Ensemble</h2>
+<p>A chorus and vibrato inspired by the 1976 CE-1. A modulated delay line stands in for the original's bucket-brigade chip.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">Download Boss CE-1 Chorus Ensemble.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put it on track with audio content.</li><li>Choose <b>Chorus</b> or <b>Vibrato</b> with <b>Mode</b>.</li><li>Chorus: set <b>Chorus Intensity</b>, which sets the speed, not the depth. Vibrato: set <b>Vibrato Rate</b> and <b>Vibrato Depth</b>.</li><li>Choose an <b>Output Mode</b> and match the level with <b>Output</b>.</li></ol>
+<h3>The two modes</h3>
+<ul>
+<li><b>Chorus:</b> only Chorus Intensity is active. It sets the LFO rate (about 1 to 3 Hz). The delay sweep is fixed (3 to 5 ms). The output is the direct signal plus the delayed signal, each at -3 dB.</li>
+<li><b>Vibrato:</b> Vibrato Rate (3.2 to 11.6 Hz) and Vibrato Depth are active. The dry signal is muted for a true pitch vibrato. At default settings the swing is roughly +/-40 cents at depth 10 and 5 Hz, and roughly +/-95 cents at depth 10 and the fastest rate.</li>
+</ul>
+<h3>Output modes</h3>
+<ul>
+<li><b>Mono Mix:</b> one output. The stereo input is summed first.</li>
+<li><b>Classic Stereo (default):</b> left is the Direct output, right is the Effect output (wet only), like the original's two jacks.</li>
+<li><b>Dual:</b> two CE-1s, one per input channel, with LFOs 90 degrees apart. The input stays stereo.</li>
+</ul>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>Range<th>What it does
+<tr><td>Mode<td>Chorus, Vibrato<td>Selects the effect. Only that mode's controls are active.
+<tr><td>Chorus Intensity<td>0 to 10<td>Chorus only. LFO rate, 1 to 3 Hz (exponential).
+<tr><td>Vibrato Rate<td>0 to 10<td>Vibrato only. Rate between Vibrato Rate Min and Max.
+<tr><td>Vibrato Depth<td>0 to 10<td>Vibrato only. Widens the delay sweep.
+<tr><td>Input Sensitivity<td>80 mV, 10 mV<td>10 mV adds 18 dB into the preamp. Use it for quiet sources.
+<tr><td>Level<td>0 to 10<td>Level into the preamp. 7 is unity, 10 is about +6 dB. Higher clips harder.
+<tr><td>Output Mode<td>3 options<td>See above.
+<tr><td>Output (dB)<td>-24 to +12<td>Level out.
+<tr><td>BBD Bandwidth (kHz)<td>3 to 16<td>Low-pass on the delayed signal. Lower sounds darker, like a worn BBD.
+<tr><td>BBD Noise (%)<td>0 to 100<td>Hiss on the delayed signal. 100% is about -60 dB.
+<tr><td>LFO Drift (%)<td>0 to 100<td>Slow random wander of the LFO rate. 100% is about +/-5%.
+<tr><td>Min Delay (ms)<td>1 to 6<td>Shortest delay, where the sweep starts.
+<tr><td>Chorus Sweep Max (ms)<td>3 to 9<td>Longest delay in Chorus mode.
+<tr><td>Chorus LFO Shape<td>0 to 100<td>Blends the LFO from triangle (0) to sine (100). Higher softens pitch changes at the sweep ends.
+<tr><td>Vibrato Sweep Max @ Depth 0 / 10 (ms)<td>3 to 9<td>Longest delay in Vibrato mode at depth 0 and depth 10. Raise the second for wilder vibrato.
+<tr><td>Vibrato Rate Min / Max (Hz)<td>0.5 to 20 / 1 to 30<td>LFO rate at Vibrato Rate 0 and 10.
+</table></div>
+<p><b>Defaults:</b> Chorus mode, Intensity 5, Vibrato Rate 5, Depth 5, 80 mV, Level 7, Classic Stereo, Output 0 dB, bandwidth 9 kHz, noise 0, drift 25, min delay 3 ms, chorus sweep 5 ms, shape 50, vibrato sweep 3.3 to 4.5 ms, vibrato rate 3.2 to 11.6 Hz.</p>
+<p class="note">The rate and delay ranges come from one published measurement of a single unit, so they are not verified. The advanced sliders let you match a real CE-1. The preamp is not oversampled, so very high Level or the Mic setting with a hot input can alias slightly.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Sliders (18):</b> 1 to 4 main, 5 to 8 input and output, 9 to 11 sound character, 12 to 18 advanced tuning. Sliders are declared as <code>slider1:mode_sw=0&lt;...&gt;</code>, so each has a named variable.</li>
+<li><b>Delay law:</b> <code>delay = dmin / (1 - k*u)</code> with <code>k = 1 - dmin/dmax</code> and <code>u</code> the LFO in 0 to 1, which mimics a clock-modulated BBD (delay is inversely proportional to clock rate). Reads use 4-point Hermite interpolation in <code>readtap()</code>.</li>
+<li><b>Buffers:</b> two delay lines of 16384 samples in memory (line A at 0, line B at <code>BUFSIZE</code>), written at <code>wp</code>. Line B is only read in Dual mode.</li>
+<li><b>LFO:</b> <code>lfoshape(p, m)</code> blends triangle and sine. Phase B is offset by 0.25 for Dual. Drift is a smoothed random target, redrawn every 0.3 s, scaling the rate by up to +/-5%.</li>
+<li><b>Preamp:</b> <code>tanh_(x*g_pre + 0.15)</code> minus its DC value, normalised by <code>pnorm</code> so small signals have unity gain. <code>g_pre = g_sens * (level/7)^2</code>.</li>
+<li><b>Smoothing:</b> rate, delay, shape and dry/wet gains use a 30 ms one-pole (<code>smc</code>) toward targets set in <code>@slider</code>, so changing mode does not click.</li>
+<li><b>BBD filter:</b> two cascaded one-poles at the bandwidth setting (clamped to 0.45 x <code>srate</code>). Noise is added before them.</li>
+<li><b>Output:</b> <code>omode</code> 0 mono mix, 1 Direct/Effect, 2 Dual. No oversampling around the preamp, which is the known aliasing limitation.</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ HARMONY ============ -->
+<section id="harmony" class="p m">
+<span class="tag">MIDI effect</span>
+<h2>Harmony</h2>
+<p>A scale and chord processor. Each key you play becomes a chord built from a scale, and every step is adjustable: the scale, a chain of scale transforms, the chord rule, and a chain of chord transforms. A port of the "pitchwheel" web tool. The scale library comes from Francesco Balena's <em>The Scale Omnibus</em>.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Harmony.jsfx">Download Harmony.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put it on a MIDI track before your instrument and open the editor.</li><li>Pick a scale in the <b>Scale</b> panel using the category arrows and list, the search box, or another source.</li><li>Choose an <b>Input</b> mode and play. With the defaults every key plays a major triad built on itself.</li><li>Shape the chord in the <b>Chord</b> and <b>Chord Transform</b> panels.</li></ol>
+<h3>Editor</h3>
+<p>The editor scales to the window. The keyboard strip shows the live scale (blue), the current chord (orange) and held keys. Values can be dragged or scrolled. Click the left or right half to step down or up, and right-click to reset to the default. In chord rule lists each number is a chip: click adds 1, right-click subtracts 1, shift-click deletes, and the <kbd>+</kbd> chip adds an entry. Lists hold up to 64 entries.</p>
+<h3>Input modes</h3>
+<ul>
+<li><b>Root:</b> each key sets the scale root to its pitch class and plays that chord in the key's own octave. Chord Octave 4 puts a middle C chord on C4.</li>
+<li><b>Degree:</b> white keys play consecutive scale degrees starting at middle C (degree 0). Black keys are ignored. Chord Octave moves the starting key.</li>
+<li><b>Direct:</b> polyphonic pass-through.</li>
+<li><b>Auto:</b> play in any key. If the held keys leave the live scale, the plugin switches to the closest scale containing them all. <b>Modal Interchange</b> rotates through the scale's modes on the same root. <b>Modulation</b> keeps the mode and transposes. <b>Distance From</b> measures against the Original scale or the Current one (default). <b>Autoreset</b> returns to the initial scale on a fresh key press. The <b>Reset</b> button also returns to it and stops sounding chords.</li>
+</ul>
+<p>In every mode except Direct each held key owns its own chord. <b>Common Notes</b> decides whether a note shared by two chords is held (legato) or retriggered.</p>
+<h3>The four panels</h3>
+<div class="tw"><table>
+<tr><th>Panel<th>Contents
+<tr><td>1 Scale<td>Source: Library (402 scales, 9 categories, searchable), Euclid, C-D (Clough-Douthett), Deep, or Custom (type a list or click the 12 cells). Generators use Events and, for Deep, Multiplicity.
+<tr><td>2 Scale Transform<td>In order: Root, Mode (rotate the pattern on the same root), Degree (same notes from another degree), Invert (with axis), Mirror, Negative (negative harmony).
+<tr><td>3 Chord<td>Octave, criterion type (Position: list of degrees, default <code>0 2 4</code>. Interval: stacked steps, default <code>2</code>), Degree, Rotation, Voices (0 uses the list length).
+<tr><td>4 Chord Transform<td>In order: Position (inversion), Offset (semitones), Mode, Invert (with axis), Mirror, Close, Spread (with top cluster), Resize (start/end), Auto-voicing. Negative picks the chord from the negative-harmony scale.
+</table></div>
+<p><b>Auto-voicing</b> picks the inversion and octave closest to the previous chord. <b>Reset memory</b> forgets it. Chord tones outside MIDI 0 to 127 are dropped. All other MIDI messages pass through, and CC 123 and 120 stop every chord.</p>
+<p><b>Automation:</b> all 38 settings are sliders (hidden from the default UI, shown in the editor) so they can be automated. Output Channel: Same as input or 1 to 16. The chord lists and custom scale are saved with the project and FX presets but cannot be automated.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Sliders (38):</b> Scale source (1 to 5), scale transform (6 to 12), chord (13 to 17), chord transform (18 to 31), input and output (32 to 38). Names start with <code>-</code>, which hides them from the standard slider UI. Keep this order: presets and automation depend on it.</li>
+<li><b>Pipeline:</b> <code>src_mask()</code> builds the base set, <code>mask_to_pos()</code> gives positions, <code>build_scale()</code> applies the transform chain into <code>A_SC</code>, <code>chord_select()</code> picks the notes, <code>chord_transforms()</code> applies the chord chain, and <code>chord_finalize()</code> maps to MIDI notes in <code>A_CHM</code>. <code>rebuild_scale()</code> and <code>rebuild_chord()</code> run them.</li>
+<li><b>Change detection:</b> <code>SH[]</code> shadows every slider. <code>handle_changes()</code> in <code>@block</code> compares them and rebuilds only when something changed. Use <code>set_sl()</code> when code changes a slider so the shadow stays in sync and it does not count as a user edit. The GUI uses <code>set_sl_ui()</code>, which calls <code>slider_automate</code>.</li>
+<li><b>Library:</b> 402 12-bit masks in <code>M_LIB</code>, with <code>M_CATS</code> and <code>M_CATN</code> for category starts and sizes, and <code>lib_name()</code> as an if-chain of names. A new scale needs a mask, a name at the matching index, and updated category tables and <code>NLIB</code>.</li>
+<li><b>Polyphony:</b> <code>V_ACT</code>, <code>V_CNT</code>, <code>V_CH</code> and <code>V_NOTES</code> hold one voice per held key. <code>O_REF</code> counts owners per (channel, note). <code>out_on()</code> sends a note-on only on 0 to 1 (or always when Common Notes is Retrigger). <code>out_off()</code> sends a note-off only when the count reaches 0.</li>
+<li><b>Auto mode:</b> <code>auto_changed()</code> checks <code>contains_notes()</code> against the held-key stack, then <code>ic_pick()</code> (interchange) or <code>mod_pick()</code> (modulation) chooses by Manhattan distance. The baseline is stored by <code>auto_enter()</code> and restored by <code>auto_restore()</code>.</li>
+<li><b>Spread:</b> EEL2 has no recursion, so <code>spread_dfs()</code> is an iterative backtracking search (capped at 20000 nodes, strict pass first, then relaxed). Spread works up to 16 notes.</li>
+<li><b>Persistence:</b> <code>@serialize</code> saves the three lists (<code>A_CRP</code>, <code>A_CRI</code>, <code>A_SCP</code>) with their lengths. <code>lists_ver</code> triggers a rebuild after loading.</li>
+<li><b>GUI:</b> <code>@gfx 1010 530</code> draws at a fixed design size scaled by <code>uis</code>. Helpers include <code>btn</code>, <code>stepper</code>, <code>chips</code>, <code>tf_run</code> (text field) and <code>draw_kbd</code>. Coordinates go through <code>fr()</code> and <code>ft()</code>, which apply the scale and offset.</li>
+</ul>
+</details>
+</section>
+
+<section id="dev" class="p">
+<h2>General developer notes</h2>
+<ul>
+<li>Each effect is one file at the top level of the repository, so installing means copying a single file.</li>
+<li>JSFX uses EEL2. There is no recursion, named strings are not reachable inside functions, and slider numbers are positional, so add new controls at the end to keep saved presets valid.</li>
+<li>Audio effects process per channel and compute coefficients in <code>@slider</code>. Anything that depends on the sample rate belongs there, because it reruns when the rate changes.</li>
+<li>The oversampled effects use IIR filters and report no latency. Test changes by A/B-ing against the oversampling set to Off, and look for aliasing with a high sine sweep.</li>
+<li>To report a bug, open an issue with the effect name, the settings, and a short description of what you expected.</li>
+</ul>
+</section>
+
+<footer>The scale library in Harmony comes from Francesco Balena, <em>The Scale Omnibus</em>. The pedals are tribute models and are not affiliated with their original manufacturers.</footer>
+</main>
+</div>
+<script>
+(function(){var d=document.documentElement;d.classList.add('js');
+var secs=[].slice.call(document.querySelectorAll('section.p')),links=[].slice.call(document.querySelectorAll('.nav-pill')),nav=document.querySelector('nav');
+function show(){var id=location.hash.slice(1);if(!secs.some(function(x){return x.id===id}))id='install';
+secs.forEach(function(x){x.classList.toggle('on',x.id===id)});
+links.forEach(function(a){var on=a.getAttribute('href')==='#'+id;a.classList.toggle('active',on);if(on)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});
+return document.getElementById(id)}
+links.forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();
+var stuck=nav.getBoundingClientRect().top<=0;history.pushState(null,'',a.getAttribute('href'));
+var el=show();
+if(stuck)scrollTo({top:el.getBoundingClientRect().top+scrollY-nav.offsetHeight-12,behavior:'instant'})})});
+addEventListener('popstate',show);show();
+var b=document.getElementById('theme');b.onclick=function(){var l=d.dataset.theme==='light';d.dataset.theme=l?'dark':'light';b.textContent=l?'\u2600':'\u263d'};
+})();
+</script>
+</body>
+</html>
