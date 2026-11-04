@@ -301,7 +301,7 @@ Next to the SCALE label, an orange `from ...` shows where the scale came from: t
 - **Degree** names the scale from its new first note, so degree 1 of C major reads `D  Dorian`.
 - **Negative** names the scale from the **Root** setting when that note is in the result, so C major reads `C  Aeolian (Natural Minor)` and D major reads `D  Aeolian (Natural Minor)`.
 - If the shape is not in the library, the title shows the root and `(not in library)`.
-- Some shapes appear under more than one name. The name is picked from the category of the library scale you chose, then from the common categories first (Major and minor, Pentatonic, Jazz, Symmetric, Modal, European, Asian, Misc), with the Indian ragas last, and finally by list order. So a major pentatonic reads `Ionian Pentatonic` and not an obscure raga.
+- Some shapes appear under more than one name. The name is picked from the category of the library scale you chose, and otherwise by list order. No tradition is favoured, so a shape that is both a raga and a Western scale shows whichever comes first in the list.
 
 #### Chord rule
 

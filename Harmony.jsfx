@@ -96,7 +96,6 @@ NN_LET = 15000;   // spelled letter for each pitch class (live scale)
 NN_ACCI = 15016;  // accidental per pitch class: -2 bb, -1 b, 0 natural, +1 #, +2 ##
 NN_CAND = 15032;  // 12 x 3 candidate letters per pitch class (-1 = none)
 NN_NAT = 15072;   // natural pitch class of each letter
-CAT_PRI = 15140;  // library category rank used to name a shape (lower = preferred)
 NN_CH = 15080; NN_OFF = 15088; NN_SC = 15096; NN_BEST = 15104; NN_CC = 15112; NN_PCS = 15120;  // search workspace (8 each)
 // polyphonic voices: one per held input key (0..127)
 V_ACT = 20000;   // voice active flag
@@ -108,7 +107,6 @@ crp_n = 3; A_CRP[0] = 0; A_CRP[1] = 2; A_CRP[2] = 4;
 cri_n = 1; A_CRI[0] = 2;
 scp_n = 7; A_SCP[0] = 0; A_SCP[1] = 2; A_SCP[2] = 4; A_SCP[3] = 5; A_SCP[4] = 7; A_SCP[5] = 9; A_SCP[6] = 11;
 lists_ver = 0; lists_ver_sh = -1;
-CAT_PRI[0] = 0; CAT_PRI[4] = 1; CAT_PRI[6] = 2; CAT_PRI[7] = 3; CAT_PRI[5] = 4; CAT_PRI[1] = 5; CAT_PRI[2] = 6; CAT_PRI[8] = 7; CAT_PRI[3] = 8;
 
 i = 0; loop(NSL + 2, SH[i] = -1000000000; i += 1;);
 i = 0; loop(128, A_NDEG[i] = NONE; V_ACT[i] = 0; V_CNT[i] = 0; i += 1;);
@@ -1062,13 +1060,13 @@ function pick_anchor(p, n) local(i, has) (
   has ? tx_root : p[0];
 );
 function lib_cat(i) local(c, r) ( r = 0; c = 0; loop(9, (i >= M_CATS[c] && i < M_CATS[c] + M_CATN[c]) ? ( r = c; ); c += 1;); r; );
-// several entries can share a shape: prefer the source's category, then the common categories (Indian ragas last), then list order
+// several entries can share a shape: prefer the source's category, then list order
 function lib_find(m, pref) local(i, c, s, best, r) (
   r = -1; best = 1000000; i = 0;
   loop(NLIB,
     M_LIB[i] == m ? (
       c = lib_cat(i);
-      s = CAT_PRI[c] + (c == pref ? -100 : 0);
+      s = c == pref ? 0 : 1;
       s < best ? ( best = s; r = i; );
     );
     i += 1;
