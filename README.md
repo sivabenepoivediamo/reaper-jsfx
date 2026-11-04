@@ -290,6 +290,19 @@ Chord tones that would fall outside MIDI notes 0 to 127 are dropped. All other M
 - **Mirror:** reads the scale in the opposite direction.
 - **Negative:** negative harmony. Every note is reflected across the axis that sits halfway between the root and its fifth.
 
+#### Detected scale
+
+The title of the **Scale** panel shows what the live scale actually is. It switches to the detected scale when **Input** is Auto, or when any of Mode, Degree, Invert, Mirror or Negative is active (Root alone does not trigger it). The plugin looks up the shape of the live scale in the library and shows its root and name, for example `C  Dorian`. This works with every scale source, not only the library.
+
+Next to the SCALE label, an orange `from ...` shows where the scale came from: the same scale without any transform, or in Auto mode the initial scale. It only appears when something changed. For example, Mode 1 on C Ionian shows `C  Dorian` with `from C  Ionian (Major)`.
+
+- **Modal Interchange** keeps the root and changes the name, so you see which mode the algorithm moved you to.
+- **Modulation** keeps the name and changes the root, since every candidate is a transposition of the same shape.
+- **Degree** names the scale from its new first note, so degree 1 of C major reads `D  Dorian`.
+- **Negative** names the scale from the **Root** setting when that note is in the result, so C major reads `C  Aeolian (Natural Minor)` and D major reads `D  Aeolian (Natural Minor)`.
+- If the shape is not in the library, the title shows the root and `(not in library)`.
+- Some shapes appear under more than one name. The name is picked from the category of the library scale you chose, then from the common categories first (Major and minor, Pentatonic, Jazz, Symmetric, Modal, European, Asian, Misc), with the Indian ragas last, and finally by list order. So a major pentatonic reads `Ionian Pentatonic` and not an obscure raga.
+
 #### Chord rule
 
 - **Position** criterion: a list of scale degrees (integers from 0 up). The default `0 2 4` is a triad.
@@ -331,8 +344,8 @@ In Auto mode the plugin looks at all the keys you are holding. If they all belon
 
 The **Sub-mode** decides what can change:
 
-- **Modal Interchange:** the scale is rotated through its own modes. The candidates are the modes of the scale you started with, all on the same root (C major, C Dorian and so on).
-- **Modulation:** the scale keeps its mode and is transposed. All twelve transpositions are candidates.
+- **Modal Interchange:** the scale is rotated through its own modes. The candidates are the modes of the scale you started with, all on the same root (C major, C Dorian and so on). The editor shows the name of the new scale.
+- **Modulation:** the scale keeps its mode and is transposed. All twelve transpositions are candidates. The editor shows the new root.
 
 **Distance From** decides what "closest" is measured against:
 
