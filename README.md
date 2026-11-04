@@ -292,7 +292,7 @@ Chord tones that would fall outside MIDI notes 0 to 127 are dropped. All other M
 
 #### Detected scale
 
-The title of the **Scale** panel shows what the live scale actually is. It switches to the detected scale when **Input** is Auto, when the **Source** is Euclid, C-D, Deep or Custom, or when any of Mode, Degree, Invert, Mirror or Negative is active (Root alone does not trigger it). A library scale keeps its own name until a transform changes it. The plugin looks up the shape of the live scale in the library and shows its root and name, for example `C  Dorian`.
+The title of the **Scale** panel always starts with the root of the live scale, followed by its name. It switches to the detected scale when **Input** is Auto, when the **Source** is Euclid, C-D, Deep or Custom, or when any of Mode, Degree, Invert, Mirror or Negative is active (Root alone does not trigger it). A library scale keeps its own name until a transform changes it. The plugin looks up the shape of the live scale in the library and shows its root and name, for example `C  Dorian`.
 
 Next to the SCALE label, an orange `from ...` shows where the scale came from: the same scale without any transform, or in Auto mode the initial scale. It only appears when something changed. For example, Mode 1 on C Ionian shows `C  Dorian` with `from C  Ionian (Major)`.
 

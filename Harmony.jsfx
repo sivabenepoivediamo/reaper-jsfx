@@ -1712,16 +1712,18 @@ strcpy(#cp, ""); i = 0;
 loop(ch_cnt, sprintf(#tp, "%d ", A_CH[i]); strcat(#cp, #tp); i += 1;);
 
 gfx_set(0.45, 0.47, 0.52, 1); ft(10, 36, "SCALE", 3);
-// Auto, a non-library source, or any scale transform active: show the detected scale (root + library name; "from" = baseline / untransformed scale, only when changed)
-(in_mode == 3 || sc_src != 0 || tx_mode != 0 || tx_deg != 0 || tx_inv || tx_mir || tx_neg) && sc_n > 0 ? (
+// Always show the root. Auto, a non-library source or any scale transform: detected library name ("from" = baseline / untransformed scale, only when changed); otherwise the selected scale's name
+sc_n > 0 ? (
   nn_name(ad_root, #hs);
-  ad_lib >= 0 ? ( lib_name(ad_lib, #tn4); strcat(#hs, "  "); strcat(#hs, #tn4); ) : strcat(#hs, "  (not in library)");
-  (ad_shape != ab_shape || ad_root != ab_root) ? (
-    nn_name(ab_root, #hf);
-    ab_lib >= 0 ? ( lib_name(ab_lib, #tn4); strcat(#hf, "  "); strcat(#hf, #tn4); );
-    strcpy(#hb, "from "); strcat(#hb, #hf);
-    gfx_set(0.93, 0.62, 0.28, 1); fit_head(#hb, 430, 3); ft(48, 36, #hb, 3);
-  );
+  (in_mode == 3 || sc_src != 0 || tx_mode != 0 || tx_deg != 0 || tx_inv || tx_mir || tx_neg) ? (
+    ad_lib >= 0 ? ( lib_name(ad_lib, #tn4); strcat(#hs, "  "); strcat(#hs, #tn4); ) : strcat(#hs, "  (not in library)");
+    (ad_shape != ab_shape || ad_root != ab_root) ? (
+      nn_name(ab_root, #hf);
+      ab_lib >= 0 ? ( lib_name(ab_lib, #tn4); strcat(#hf, "  "); strcat(#hf, #tn4); );
+      strcpy(#hb, "from "); strcat(#hb, #hf);
+      gfx_set(0.93, 0.62, 0.28, 1); fit_head(#hb, 430, 3); ft(48, 36, #hb, 3);
+    );
+  ) : ( strcat(#hs, "  "); strcat(#hs, #sc_title); );
 ) : strcpy(#hs, #sc_title);
 gfx_set(0.55, 0.78, 0.95, 1); fit_head(#hs, 480, 2); ft(10, 48, #hs, 2);
 gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hp, #sc_pos); strcpy(#hp2, "positions: "); strcat(#hp2, #hp); strcat(#hp2, "   notes: "); strcat(#hp2, #sc_names); fit_head(#hp2, 480, 1); ft(10, 76, #hp2, 1);
