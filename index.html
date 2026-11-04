@@ -295,7 +295,7 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 <li><b>Root:</b> each key sets the scale root to its pitch class and plays that chord in the key's own octave. Chord Octave 4 puts a middle C chord on C4.</li>
 <li><b>Degree:</b> white keys play consecutive scale degrees starting at middle C (degree 0). Black keys are ignored. Chord Octave moves the starting key.</li>
 <li><b>Direct:</b> polyphonic pass-through.</li>
-<li><b>Auto:</b> play in any key. If the held keys leave the live scale, the plugin switches to the closest scale containing them all. <b>Modal Interchange</b> rotates through the scale's modes on the same root. <b>Modulation</b> keeps the mode and transposes. <b>Distance From</b> measures against the Original scale or the Current one (default). <b>Autoreset</b> returns to the initial scale on a fresh key press. The <b>Reset</b> button also returns to it and stops sounding chords.</li>
+<li><b>Auto:</b> play in any key. If the held keys leave the live scale, the plugin switches to the closest scale containing them all. <b>Modal Interchange</b> rotates through the scale's modes on the same root, and the editor shows the name of the new scale. <b>Modulation</b> keeps the mode and transposes, and the editor shows the new root. <b>Distance From</b> measures against the Original scale or the Current one (default). <b>Autoreset</b> returns to the initial scale on a fresh key press. The <b>Reset</b> button also returns to it and stops sounding chords.</li>
 </ul>
 <p>In every mode except Direct each held key owns its own chord. <b>Common Notes</b> decides whether a note shared by two chords is held (legato) or retriggered.</p>
 <h3>The four panels</h3>
@@ -308,6 +308,16 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 </table></div>
 <p><b>Auto-voicing</b> picks the inversion and octave closest to the previous chord. <b>Reset memory</b> forgets it. Chord tones outside MIDI 0 to 127 are dropped. All other MIDI messages pass through, and CC 123 and 120 stop every chord.</p>
 <p><b>Automation:</b> all 38 settings are sliders (hidden from the default UI, shown in the editor) so they can be automated. Output Channel: Same as input or 1 to 16. The chord lists and custom scale are saved with the project and FX presets but cannot be automated.</p>
+<h3>Detected scale</h3>
+<p>The title of the Scale panel shows what the live scale actually is. It switches to the detected scale when Input is Auto, or when Mode, Degree, Invert, Mirror or Negative is active (Root alone does not trigger it). The plugin looks up the shape of the live scale in the library and shows its root and name, for example <code>C  Dorian</code>. This works with every scale source. An orange <code>from ...</code> next to the SCALE label shows where it came from: the same scale without transforms, or in Auto the initial scale. It only appears when something changed.</p>
+<ul>
+<li><b>Modal Interchange:</b> the root stays and the name changes.</li>
+<li><b>Modulation:</b> the name stays and the root changes.</li>
+<li><b>Degree:</b> named from its new first note. Degree 1 of C major reads <code>D  Dorian</code>.</li>
+<li><b>Negative:</b> named from the Root setting when that note is in the result. C major reads <code>C  Aeolian (Natural Minor)</code>.</li>
+<li><b>Not in the library:</b> the title shows the root and <code>(not in library)</code>.</li>
+<li><b>Shared shapes:</b> when several entries have the same shape, the name comes from the category of the library scale you chose, then from the common categories first, with Indian ragas last, then list order.</li>
+</ul>
 </details>
 
 <details><summary>Developer notes</summary>
@@ -318,6 +328,7 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 <li><b>Library:</b> 402 12-bit masks in <code>M_LIB</code>, with <code>M_CATS</code> and <code>M_CATN</code> for category starts and sizes, and <code>lib_name()</code> as an if-chain of names. A new scale needs a mask, a name at the matching index, and updated category tables and <code>NLIB</code>.</li>
 <li><b>Polyphony:</b> <code>V_ACT</code>, <code>V_CNT</code>, <code>V_CH</code> and <code>V_NOTES</code> hold one voice per held key. <code>O_REF</code> counts owners per (channel, note). <code>out_on()</code> sends a note-on only on 0 to 1 (or always when Common Notes is Retrigger). <code>out_off()</code> sends a note-off only when the count reaches 0.</li>
 <li><b>Auto mode:</b> <code>auto_changed()</code> checks <code>contains_notes()</code> against the held-key stack, then <code>ic_pick()</code> (interchange) or <code>mod_pick()</code> (modulation) chooses by Manhattan distance. The baseline is stored by <code>auto_enter()</code> and restored by <code>auto_restore()</code>.</li>
+<li><b>Scale detection:</b> <code>rebuild_scale()</code> keeps two descriptors, current (<code>ad_*</code>, from <code>A_PRE</code>) and reference (<code>ab_*</code>, from <code>A_BASE</code> in Auto, otherwise the untransformed scale in <code>A_TMP2</code>), each with shape mask, library index and root. <code>shape_mask()</code> builds the 12-bit shape relative to a root, <code>pick_anchor()</code> chooses that root (the first note, or the Root setting with Negative), and <code>lib_find()</code> returns the best library match, ranked by <code>CAT_PRI</code> with a bonus for the selected category. Names are built in <code>@gfx</code>, so the audio thread only stores numbers.</li>
 <li><b>Spread:</b> EEL2 has no recursion, so <code>spread_dfs()</code> is an iterative backtracking search (capped at 20000 nodes, strict pass first, then relaxed). Spread works up to 16 notes.</li>
 <li><b>Persistence:</b> <code>@serialize</code> saves the three lists (<code>A_CRP</code>, <code>A_CRI</code>, <code>A_SCP</code>) with their lengths. <code>lists_ver</code> triggers a rebuild after loading.</li>
 <li><b>GUI:</b> <code>@gfx 1010 530</code> draws at a fixed design size scaled by <code>uis</code>. Helpers include <code>btn</code>, <code>stepper</code>, <code>chips</code>, <code>tf_run</code> (text field) and <code>draw_kbd</code>. Coordinates go through <code>fr()</code> and <code>ft()</code>, which apply the scale and offset.</li>

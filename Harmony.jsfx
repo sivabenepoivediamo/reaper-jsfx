@@ -49,10 +49,11 @@ slider35:auto_rst=0<0,1,1{Off,On}>-Input: Auto Autoreset
 slider36:out_ch=0<0,16,1{Same as input,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}>-Output Channel
 slider37:act=0<0,2,1{-,Reset Auto,Reset Voice-Leading}>-Action
 slider38:common_mode=0<0,1,1{Hold,Retrigger}>-Input: Common Notes
+slider39:nn_pref=0<0,2,1{Auto,Sharps,Flats}>-Note names: Accidentals
 
 @init
 ext_noinit = 1;
-NSL = 38;
+NSL = 39;
 NONE = -99999;
 DEG_MIN = -72; DEG_MAX = 80;   // chord degree range: covers every MIDI note 0..127 in Degree mode
 S_SRC = 1; S_ROOT = 6; S_MODE = 7; S_SHIFT = 15; S_INMODE = 32; S_SUB = 33; S_ACT = 37;
@@ -90,6 +91,13 @@ A_SCP = 13200;  // custom scale: list of positions (max 64)
 A_FLT = 13400;  // GUI: filtered scale list (512)
 G_TMP = 14000;  // GUI scratch (never used by the audio thread)
 LIST_MAX = 64;
+// note naming (letters are indexed 0..6 = C D E F G A B)
+NN_LET = 15000;   // spelled letter for each pitch class (live scale)
+NN_ACCI = 15016;  // accidental per pitch class: -2 bb, -1 b, 0 natural, +1 #, +2 ##
+NN_CAND = 15032;  // 12 x 3 candidate letters per pitch class (-1 = none)
+NN_NAT = 15072;   // natural pitch class of each letter
+CAT_PRI = 15140;  // library category rank used to name a shape (lower = preferred)
+NN_CH = 15080; NN_OFF = 15088; NN_SC = 15096; NN_BEST = 15104; NN_CC = 15112; NN_PCS = 15120;  // search workspace (8 each)
 // polyphonic voices: one per held input key (0..127)
 V_ACT = 20000;   // voice active flag
 V_CNT = 20256;   // number of chord notes in the voice
@@ -100,10 +108,27 @@ crp_n = 3; A_CRP[0] = 0; A_CRP[1] = 2; A_CRP[2] = 4;
 cri_n = 1; A_CRI[0] = 2;
 scp_n = 7; A_SCP[0] = 0; A_SCP[1] = 2; A_SCP[2] = 4; A_SCP[3] = 5; A_SCP[4] = 7; A_SCP[5] = 9; A_SCP[6] = 11;
 lists_ver = 0; lists_ver_sh = -1;
+CAT_PRI[0] = 0; CAT_PRI[4] = 1; CAT_PRI[6] = 2; CAT_PRI[7] = 3; CAT_PRI[5] = 4; CAT_PRI[1] = 5; CAT_PRI[2] = 6; CAT_PRI[8] = 7; CAT_PRI[3] = 8;
 
 i = 0; loop(NSL + 2, SH[i] = -1000000000; i += 1;);
 i = 0; loop(128, A_NDEG[i] = NONE; V_ACT[i] = 0; V_CNT[i] = 0; i += 1;);
 i = 0; loop(2048, O_REF[i] = 0; i += 1;);
+
+// enharmonic table (the noteArrays of NoteNamingSystem): letters that may spell each pitch class
+NN_NAT[0] = 0; NN_NAT[1] = 2; NN_NAT[2] = 4; NN_NAT[3] = 5; NN_NAT[4] = 7; NN_NAT[5] = 9; NN_NAT[6] = 11;
+i = 0; loop(36, NN_CAND[i] = -1; i += 1;);
+NN_CAND[0]  = 0; NN_CAND[1]  = 6; NN_CAND[2]  = 1;   // C   B#  Dbb
+NN_CAND[3]  = 0; NN_CAND[4]  = 1;                    // C#  Db
+NN_CAND[6]  = 1; NN_CAND[7]  = 0; NN_CAND[8]  = 2;   // D   C## Ebb
+NN_CAND[9]  = 1; NN_CAND[10] = 2;                    // D#  Eb
+NN_CAND[12] = 2; NN_CAND[13] = 1; NN_CAND[14] = 3;   // E   D## Fb
+NN_CAND[15] = 3; NN_CAND[16] = 2; NN_CAND[17] = 4;   // F   E#  Gbb
+NN_CAND[18] = 3; NN_CAND[19] = 4;                    // F#  Gb
+NN_CAND[21] = 4; NN_CAND[22] = 3; NN_CAND[23] = 5;   // G   F## Abb
+NN_CAND[24] = 4; NN_CAND[25] = 5;                    // G#  Ab
+NN_CAND[27] = 5; NN_CAND[28] = 4; NN_CAND[29] = 6;   // A   G## Bbb
+NN_CAND[30] = 5; NN_CAND[31] = 6;                    // A#  Bb
+NN_CAND[33] = 6; NN_CAND[34] = 5; NN_CAND[35] = 0;   // B   A## Cb
 
 stk_n = 0; snd_n = 0; snd_ch = 0; vl_n = 0;
 sc_n = 0; bn = 0; cm_n = 0; ch_cnt = 0;
@@ -912,6 +937,145 @@ function rebuild_chord() local(n) (
     n > 0 ? ( n = chord_transforms(n); ch_cnt = n; chord_finalize(n); );
   );
 );
+
+// ---------------- note naming (port of NoteNamingSystem) ----------------
+// accidental of `letter` needed to reach pitch class pc, in -6..5
+function nn_accof(pc, letter) ( pmod(pc - NN_NAT[letter] + 6, 12) - 6; );
+
+// scoring of one spelled note (same idea as scoreConfiguration)
+// pref: 0 = Auto (fewest accidentals, sharps win ties), 1 = Sharps, 2 = Flats
+function nn_score(acc, pref) (
+  pref == 1 ? ( acc == 0 ? 5 : acc == 1 ? 10 : acc == -1 ? -10 : -1000; ) :
+  pref == 2 ? ( acc == 0 ? 5 : acc == -1 ? 10 : acc == 1 ? -10 : -1000; ) :
+              ( acc == 0 ? 5 : acc == 1 ? -9 : acc == -1 ? -10 : -1000; );
+);
+
+// standard algorithm for one pitch class: natural first, then the preferred accidental
+function nn_fallback(pc, sharps) local(j, l, a, r, br, bl) (
+  br = 99; bl = 0; j = 0;
+  loop(3,
+    l = NN_CAND[pc * 3 + j];
+    l >= 0 ? (
+      a = nn_accof(pc, l);
+      r = a == 0 ? 0 : (a == (sharps ? 1 : -1) ? 1 : 5);
+      r < br ? ( br = r; bl = l; );
+    );
+    j += 1;
+  );
+  NN_LET[pc] = bl; NN_ACCI[pc] = nn_accof(pc, bl);
+);
+
+// Finds the best spelling of n scale degrees (n <= 7) where the letters ascend strictly
+// (cyclically, starting from the first degree's letter). For n = 7 this means seven
+// consecutive letters, exactly like findConsecutiveConfiguration. Iterative DFS (no recursion in EEL2).
+// Reads NN_PCS / NN_CC, writes the best candidate index per degree into NN_BEST.
+// Returns 1 if a spelling without double accidentals exists.
+function nn_search(n, pref) local(d, l, l0, pc, off, ok, found, best, i) (
+  found = 0; best = -1000000000; l0 = 0; off = 0; ok = 0;
+  d = 0; NN_CH[0] = 0;
+  while (d >= 0) (
+    NN_CH[d] >= NN_CC[d] ? (
+      d -= 1;
+      d >= 0 ? ( NN_CH[d] += 1; );
+    ) : (
+      pc = NN_PCS[d];
+      l = NN_CAND[pc * 3 + NN_CH[d]];
+      d == 0 ? ( l0 = l; off = 0; ok = 1; ) : ( off = pmod(l - l0, 7); ok = off > NN_OFF[d - 1]; );
+      ok ? (
+        NN_OFF[d] = off;
+        NN_SC[d] = (d > 0 ? NN_SC[d - 1] : 0) + nn_score(nn_accof(pc, l), pref);
+        d == n - 1 ? (
+          NN_SC[d] > best ? ( best = NN_SC[d]; found = 1; i = 0; loop(n, NN_BEST[i] = NN_CH[i]; i += 1;); );
+          NN_CH[d] += 1;
+        ) : ( d += 1; NN_CH[d] = 0; );
+      ) : ( NN_CH[d] += 1; );
+    );
+  );
+  (found && best > -500) ? 1 : 0;     // a double accidental costs -1000, so best <= -500 means one was needed
+);
+
+// Spells all 12 pitch classes for the live scale (call after A_SC / sc_n / scale_pcm are up to date)
+function nn_spell() local(i, pc, l, found, sharps, nsh, nfl, tonic, pref) (
+  pref = floor(nn_pref + 0.5);
+  found = 0;
+  (sc_n > 0 && sc_n <= 7) ? (
+    i = 0;
+    loop(sc_n,
+      pc = pmod(A_SC[i], 12);
+      NN_PCS[i] = pc;
+      NN_CC[i] = NN_CAND[pc * 3 + 2] >= 0 ? 3 : 2;
+      i += 1;
+    );
+    found = nn_search(sc_n, pref);
+  );
+  nsh = 0; nfl = 0;
+  found ? (
+    i = 0;
+    loop(sc_n,
+      pc = NN_PCS[i]; l = NN_CAND[pc * 3 + NN_BEST[i]];
+      NN_LET[pc] = l; NN_ACCI[pc] = nn_accof(pc, l);
+      NN_ACCI[pc] > 0 ? ( nsh += 1; );
+      NN_ACCI[pc] < 0 ? ( nfl += 1; );
+      i += 1;
+    );
+  );
+  // direction used for pitch classes the scale does not spell (chord notes outside the scale,
+  // scales that cannot be spelled with distinct letters)
+  tonic = sc_n > 0 ? pmod(A_SC[0], 12) : 0;
+  sharps = pref == 1 ? 1 : pref == 2 ? 0 :
+           nsh > nfl ? 1 : nfl > nsh ? 0 :
+           (tonic == 1 || tonic == 3 || tonic == 5 || tonic == 8 || tonic == 10) ? 0 : 1;
+  i = 0;
+  loop(12,
+    (found && bitv(scale_pcm, i)) ? 0 : nn_fallback(i, sharps);
+    i += 1;
+  );
+);
+
+// printable names: spelled letter + accidental (ASCII)
+function nn_name(pc, dst) local(a) (
+  a = NN_ACCI[pc];
+  strcpy_substr(dst, "CDEFGAB", NN_LET[pc], 1);
+  strcat(dst, a == 1 ? "#" : a == 2 ? "##" : a == -1 ? "b" : a == -2 ? "bb" : "");
+);
+// with octave: the octave belongs to the letter (B#3 = MIDI 60, Cb4 = MIDI 59)
+function nn_name_oct(n, dst) local(pc) (
+  pc = pmod(n, 12);
+  nn_name(pc, dst);
+  sprintf(#nn_o, "%d", floor((n - NN_ACCI[pc]) / 12) - 1);
+  strcat(dst, #nn_o);
+);
+
+// sane defaults until the first rebuild
+i = 0; loop(12, nn_fallback(i, 1); i += 1;);
+
+// Auto display: scale shape = intervals from its first note, looked up in the library
+function shape_mask(p, n, r) local(i, b, m) (
+  m = 0; i = 0;
+  loop(n, b = pmod(p[i] - r, 12); bitv(m, b) ? 0 : ( m += 2^b; ); i += 1;);
+  m;
+);
+// naming root: first note, except with Negative where the scale is anchored on the transform root (C major -> C minor)
+function pick_anchor(p, n) local(i, has) (
+  has = 0; i = 0;
+  tx_neg ? ( loop(n, pmod(p[i] - tx_root, 12) == 0 ? ( has = 1; ); i += 1;); );
+  has ? tx_root : p[0];
+);
+function lib_cat(i) local(c, r) ( r = 0; c = 0; loop(9, (i >= M_CATS[c] && i < M_CATS[c] + M_CATN[c]) ? ( r = c; ); c += 1;); r; );
+// several entries can share a shape: prefer the source's category, then the common categories (Indian ragas last), then list order
+function lib_find(m, pref) local(i, c, s, best, r) (
+  r = -1; best = 1000000; i = 0;
+  loop(NLIB,
+    M_LIB[i] == m ? (
+      c = lib_cat(i);
+      s = CAT_PRI[c] + (c == pref ? -100 : 0);
+      s < best ? ( best = s; r = i; );
+    );
+    i += 1;
+  );
+  r;
+);
+
 function rebuild_scale() local(m, i, c) (
   m = src_mask();
   bn = mask_to_pos(m, A_BP);
@@ -924,6 +1088,21 @@ function rebuild_scale() local(m, i, c) (
       sort_asc(A_SC, sc_n);
     );
     build_scale(A_BASE, auto_base_rot);
+    // current (before modulation) and baseline: shape, library entry, root
+    ad_pref = sc_src == 0 ? floor(sc_cat + 0.5) : -1;
+    ad_anc = pick_anchor(A_PRE, sc_n);
+    ad_shape = shape_mask(A_PRE, sc_n, ad_anc); ad_lib = lib_find(ad_shape, ad_pref);
+    ad_root = pmod(ad_anc + (auto_mod_t > 0 ? auto_mod_t : 0), 12);
+    // reference: Auto = pinned baseline; otherwise the source scale without transforms
+    in_mode == 3 ? (
+      ref_p = A_BASE; ab_anc = pick_anchor(A_BASE, sc_n);
+    ) : (
+      copy_arr(A_TMP2, A_BP, sc_n);
+      i = 0; loop(sc_n, A_TMP2[i] += tx_root; i += 1;);
+      ref_p = A_TMP2; ab_anc = tx_root;
+    );
+    ab_shape = shape_mask(ref_p, sc_n, ab_anc); ab_lib = lib_find(ab_shape, ad_pref);
+    ab_root = pmod(ab_anc, 12);
     sc_n != last_N ? (
       last_N = sc_n;
       c = max(DEG_MIN, min(DEG_MAX, ch_shift));
@@ -934,6 +1113,7 @@ function rebuild_scale() local(m, i, c) (
   // pitch-class mask of the live scale (for display)
   scale_pcm = 0; i = 0;
   loop(sc_n, c = pmod(A_SC[i], 12); bitv(scale_pcm, c) ? 0 : ( scale_pcm += 2^c; ); i += 1;);
+  nn_spell();
   name_dirty = 1;
 );
 
@@ -1237,10 +1417,7 @@ function fit_tail(s, maxw, fi) local(tw, th) (     // keep the end, trim the beg
   while (tw > maxw * uis && strlen(s) > 1) ( str_delsub(s, 0, 1); gfx_measurestr(s, tw, th); );
 );
 function pcname(pc, dst) ( strcpy_substr(dst, PCNAMES, pc * 2, (pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10) ? 2 : 1); );
-function note_name(n, dst) local(pc) (
-  pc = pmod(n, 12); pcname(pc, dst);
-  sprintf(#nn_oct, "%d", floor(n / 12) - 1); strcat(dst, #nn_oct);
-);
+function note_name(n, dst) ( nn_name_oct(n, dst); );   // spelled according to the live scale
 
 // ---------- generic widgets ----------
 function btn(x, y, w, h, s, on, fi) local(hov) (
@@ -1279,7 +1456,8 @@ function stepper(x, y, w, lw, label, si, vmin, vmax, fmt, dflt) local(bx, bw, v,
   gfx_set(0.45, 0.47, 0.52, 1);
   gfx_triangle(ox + (bx + 9) * uis, oy + 6 * uis + y * uis, ox + (bx + 9) * uis, oy + 14 * uis + y * uis, ox + (bx + 4) * uis, oy + 10 * uis + y * uis);
   gfx_triangle(ox + (bx + bw - 9) * uis, oy + 6 * uis + y * uis, ox + (bx + bw - 9) * uis, oy + 14 * uis + y * uis, ox + (bx + bw - 4) * uis, oy + 10 * uis + y * uis);
-  fmt == 1 ? ( pcname(pmod(v, 12), #vs); ) :
+  fmt == 1 ? ( nn_name(pmod(v, 12), #vs); ) :     // root name follows the Names preference / scale spelling
+ 
   fmt == 2 ? ( v == 0 ? strcpy(#vs, "Same") : sprintf(#vs, "%d", v); ) :
              ( sprintf(#vs, "%d", v); );
   gfx_set(0.95, 0.94, 0.90, 1); ftc(bx, y, bw, 20, #vs, 1);
@@ -1389,8 +1567,8 @@ function chips(x, y, id, minv) local(p, n, k, cx, cy, hov, v, j, shown, per, row
   );
   n + 1 > per * rows ? ( gfx_set(0.55, 0.57, 0.62, 1); sprintf(#more, "+%d more (edit with the text field)", n + 1 - per * rows); ft(x, y + rows * 22, #more, 3); );
 );
-// row of 12 pitch-class cells; returns clicked pc or -1
-function pc_row(x, y, mask, clickable) local(k, cx, on, hov, res, blk) (
+// row of 12 pitch-class cells; returns clicked pc or -1. spell = 1: active cells use the scale's spelling
+function pc_row(x, y, mask, clickable, spell) local(k, cx, on, hov, res, blk) (
   res = -1; k = 0;
   loop(12,
     cx = x + k * 18.7;
@@ -1400,7 +1578,8 @@ function pc_row(x, y, mask, clickable) local(k, cx, on, hov, res, blk) (
     on ? gfx_set(0.93, 0.62, 0.28, 1) : ( hov ? gfx_set(0.27, 0.30, 0.37, 1) : ( blk ? gfx_set(0.10, 0.11, 0.14, 1) : gfx_set(0.20, 0.22, 0.27, 1) ) );
     fr(cx, y, 17, 20);
     on ? gfx_set(0.08, 0.09, 0.11, 1) : gfx_set(0.62, 0.63, 0.66, 1);
-    pcname(k, #pcl); ftc(cx, y, 17, 20, #pcl, 3);
+    (spell && on) ? nn_name(k, #pcl) : pcname(k, #pcl);
+    ftc(cx, y, 17, 20, #pcl, 3);
     (clickable && hov && mclick) ? ( res = k; );
     k += 1;
   );
@@ -1441,6 +1620,17 @@ function key_color(n, black) local(pc, sc, ch) (
        ( black ? gfx_set(0.10, 0.11, 0.13, 1) : gfx_set(0.91, 0.89, 0.85, 1) );
 );
 function is_held(n) ( stk_find(n) >= 0; );
+// label a key with its spelled name when it belongs to the scale or the chord (C keys always show the octave)
+function key_label(n, black, kx, kwid, ly) local(pc, sc, ch) (
+  pc = pmod(n, 12); sc = bitv(scale_pcm, pc); ch = in_chord(n);
+  (sc || ch || pc == 0) ? (
+    pc == 0 ? note_name(n, #kn) : nn_name(pc, #kn);
+    (sc || ch) ? (
+      (ch || black == 0) ? gfx_set(0.08, 0.09, 0.11, 1) : gfx_set(0.95, 0.95, 0.95, 1);
+    ) : gfx_set(0.35, 0.35, 0.37, 1);
+    ftc(kx, ly, kwid, 14, #kn, 3);
+  );
+);
 function draw_kbd(x0, y0, w, h) local(low, n, pc, wi, kw, kx, isb, bw, nn) (
   low = 60 + (floor(ch_oct + 0.5) - 5) * 12;
   nn = 49; kw = w / 29; bw = kw * 0.6;
@@ -1452,7 +1642,7 @@ function draw_kbd(x0, y0, w, h) local(low, n, pc, wi, kw, kx, isb, bw, nn) (
       kx = x0 + wi * kw;
       key_color(n, 0); fr(kx, y0, kw - 1, h);
       is_held(n) ? ( gfx_set(0.78, 0.30, 0.30, 1); fr(kx, y0 + h - 6, kw - 1, 6); );
-      pc == 0 ? ( gfx_set(0.35, 0.35, 0.37, 1); note_name(n, #kn); ft(kx + 3, y0 + h - 17, #kn, 3); );
+      key_label(n, 0, kx, kw - 1, y0 + h - 20);
       wi += 1;
     );
     n += 1;
@@ -1465,6 +1655,7 @@ function draw_kbd(x0, y0, w, h) local(low, n, pc, wi, kw, kx, isb, bw, nn) (
       kx = x0 + wi * kw - bw / 2;
       key_color(n, 1); fr(kx, y0, bw, h * 0.6);
       is_held(n) ? ( gfx_set(0.78, 0.30, 0.30, 1); fr(kx, y0 + h * 0.6 - 6, bw, 6); );
+      key_label(n, 1, kx, bw, y0 + h * 0.6 - 20);
     ) : ( wi += 1; );
     n += 1;
   );
@@ -1515,14 +1706,27 @@ stepper(912, 6, 90, 0, "", 36, 0, 16, 2, 0);
 scale_title(#sc_title);
 strcpy(#sc_pos, ""); i = 0;
 loop(sc_n, sprintf(#tp, "%d ", A_SC[i]); strcat(#sc_pos, #tp); i += 1;);
+strcpy(#sc_names, ""); i = 0;
+loop(sc_n, nn_name(pmod(A_SC[i], 12), #tn3); strcat(#sc_names, #tn3); strcat(#sc_names, " "); i += 1;);
 strcpy(#cn, ""); i = 0;
 loop(cm_n, note_name(A_CHM[i], #tn2); strcat(#cn, #tn2); strcat(#cn, "  "); i += 1;);
 strcpy(#cp, ""); i = 0;
 loop(ch_cnt, sprintf(#tp, "%d ", A_CH[i]); strcat(#cp, #tp); i += 1;);
 
 gfx_set(0.45, 0.47, 0.52, 1); ft(10, 36, "SCALE", 3);
-gfx_set(0.55, 0.78, 0.95, 1); strcpy(#hs, #sc_title); fit_head(#hs, 480, 2); ft(10, 48, #hs, 2);
-gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hp, #sc_pos); strcpy(#hp2, "positions: "); strcat(#hp2, #hp); fit_head(#hp2, 480, 1); ft(10, 76, #hp2, 1);
+// Auto, or any scale transform active: show the detected scale (root + library name; "from" = baseline / untransformed scale, only when changed)
+(in_mode == 3 || tx_mode != 0 || tx_deg != 0 || tx_inv || tx_mir || tx_neg) && sc_n > 0 ? (
+  nn_name(ad_root, #hs);
+  ad_lib >= 0 ? ( lib_name(ad_lib, #tn4); strcat(#hs, "  "); strcat(#hs, #tn4); ) : strcat(#hs, "  (not in library)");
+  (ad_shape != ab_shape || ad_root != ab_root) ? (
+    nn_name(ab_root, #hf);
+    ab_lib >= 0 ? ( lib_name(ab_lib, #tn4); strcat(#hf, "  "); strcat(#hf, #tn4); );
+    strcpy(#hb, "from "); strcat(#hb, #hf);
+    gfx_set(0.93, 0.62, 0.28, 1); fit_head(#hb, 430, 3); ft(48, 36, #hb, 3);
+  );
+) : strcpy(#hs, #sc_title);
+gfx_set(0.55, 0.78, 0.95, 1); fit_head(#hs, 480, 2); ft(10, 48, #hs, 2);
+gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hp, #sc_pos); strcpy(#hp2, "positions: "); strcat(#hp2, #hp); strcat(#hp2, "   notes: "); strcat(#hp2, #sc_names); fit_head(#hp2, 480, 1); ft(10, 76, #hp2, 1);
 gfx_set(0.45, 0.47, 0.52, 1); ft(510, 36, "CHORD", 3);
 gfx_set(0.93, 0.62, 0.28, 1); strcpy(#hc, #cn); cm_n == 0 ? strcpy(#hc, "-"); fit_head(#hc, 490, 2); ft(510, 48, #hc, 2);
 gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hq, "steps: "); strcat(#hq, #cp); fit_head(#hq, 490, 1); ft(510, 76, #hq, 1);
@@ -1536,6 +1740,10 @@ gfx_set(0.45, 0.47, 0.52, 1); ft(10, 94, #ml, 3);
 gfx_set(0.60, 0.62, 0.67, 1); ft(690, 92, "Common notes", 1);
 opt(776, 90, 62, 16, "Hold", 38, 0);
 opt(840, 90, 74, 16, "Retrigger", 38, 1);
+gfx_set(0.60, 0.62, 0.67, 1); ft(486, 92, "Names", 1);
+opt(528, 90, 44, 16, "Auto", 39, 0);
+opt(574, 90, 52, 16, "Sharps", 39, 1);
+opt(628, 90, 44, 16, "Flats", 39, 2);
 
 draw_kbd(10, 110, 990, 52);
 
@@ -1628,13 +1836,13 @@ sc_src == 0 ? (
 gfx_set(0.60, 0.62, 0.67, 1); ft(x, 484, "base scale", 3);
 bm = src_mask();
 sc_src == 4 ? (
-  pk = pc_row(x, 498, bm, 1);
+  pk = pc_row(x, 498, bm, 1, 0);
   pk >= 0 ? (
     bm = bm + (bitv(bm, pk) ? -(2^pk) : 2^pk);
     n = 0; i = 0; loop(12, bitv(bm, i) ? ( A_SCP[n] = i; n += 1; ); i += 1;);
     list_set_len(1, n);
   );
-) : ( pc_row(x, 498, bm, 0); );
+) : ( pc_row(x, 498, bm, 0, 0); );
 
 // ----- 2 SCALE TRANSFORM -----
 x = 268; w = 224;
@@ -1646,7 +1854,7 @@ stepper(x + 76, 274, w - 76, 40, "axis", 10, -12, 12, 0, 0);
 tog(x, 300, 107, 20, "Mirror", 11);
 tog(x + 117, 300, 107, 20, "Negative", 12);
 gfx_set(0.60, 0.62, 0.67, 1); ft(x, 340, "resulting scale", 3);
-pc_row(x, 354, scale_pcm, 0);
+pc_row(x, 354, scale_pcm, 0, 1);
 gfx_set(0.45, 0.47, 0.52, 1);
 sprintf(#t2, "%d notes", sc_n); ft(x, 380, #t2, 3);
 ft(x, 404, "Order of operations:", 3);
@@ -1711,6 +1919,5 @@ ft(x, 468, "resize > auto-voicing", 3);
 // text field housekeeping
 tf_seen == 0 ? ( tf_id = 0; );
 last_cap = mouse_cap;
-
 
 
