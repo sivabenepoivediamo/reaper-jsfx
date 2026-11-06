@@ -260,7 +260,7 @@ A MIDI scale and chord engine. Each note you play is expanded into a chord that 
 
 Unlike Block Chords, which harmonizes a melody, Harmony treats each key as a command. Depending on the **Input** mode, the key sets the root, picks a scale degree, or lets the plugin work out which scale you are playing in.
 
-The effect has its own editor that scales to fit the window. A keyboard strip above the panels shows the live scale (blue), the current chord (orange) and the keys you are holding.
+The effect has its own editor that scales to fit the window. A keyboard strip above the panels shows the live scale (blue), the current chord (orange) and the keys you are holding. Note names are spelled to fit the scale, with the right flats or sharps (see Note names below).
 
 ### How it works
 
@@ -298,10 +298,20 @@ Next to the SCALE label, an orange `from ...` shows where the scale came from: t
 
 - **Modal Interchange** keeps the root and changes the name, so you see which mode the algorithm moved you to.
 - **Modulation** keeps the name and changes the root, since every candidate is a transposition of the same shape.
+- **Adapt** reshapes the scale, so the original root may no longer fit. The plugin first reads the adapted scale from the original root. If that shape is not in the library, it tries each note of the adapted scale as the root and takes the match closest to the original root (ties go upward). For example, C major with C# held becomes `C#  Altered Dominant` (`from C  Ionian (Major)`), and with Bb and C# held it becomes `C#  Ultralocrian`.
 - **Degree** names the scale from its new first note, so degree 1 of C major reads `D  Dorian`.
 - **Negative** names the scale from the **Root** setting when that note is in the result, so C major reads `C  Aeolian (Natural Minor)` and D major reads `D  Aeolian (Natural Minor)`.
 - If the shape is not in the library, the title shows the root and `(not in library)`.
 - Some shapes appear under more than one name. The name is picked from the category of the library scale you chose, and otherwise by list order. No tradition is favoured, so a shape that is both a raga and a Western scale shows whichever comes first in the list.
+
+#### Note names
+
+Every note name in the editor (the keyboard labels, the scale and chord notes in the header, the **Root** value and the pitch-class cells) is spelled to fit the live scale, so a flat key shows Eb and not D#. The **Names** setting in the header decides how:
+
+- **Auto:** a seven-note scale gets one letter per degree whenever that is possible, with the fewest accidentals, so Eb major reads Eb F G Ab Bb C D. Sharps win a tie. A scale that cannot be spelled this way (for example, one that would need double accidentals) and every scale with another number of notes keep their white keys plain and use the sharps or flats that match the scale. Minor-type scales are judged by their relative major, so C minor uses flats.
+- **Sharps** and **Flats:** prefer that kind of accidental everywhere.
+
+Notes outside the scale, such as chord tones, use the same sharp or flat direction as the scale. All twelve pitch-class cells follow it too, including the unlit ones, and so does the root in the detected scale name. The octave belongs to the letter, so B#3 is MIDI note 60 and Cb4 is MIDI note 59.
 
 #### Chord rule
 
@@ -334,31 +344,38 @@ Auto-voicing remembers the previous chord. **Reset memory** forgets it, so the n
 - **Root:** each key sets the scale root to its pitch class and plays that chord. The chord sits in the octave of the key you play, so there is no octave looping: a C one octave higher gives a chord one octave higher. The **Chord Octave** setting is relative to that, with the octave of middle C as the reference. At the default of 4, a middle C gives a chord rooted on C4, and 5 puts the chord an octave above the key.
 - **Degree:** white keys play the chords of consecutive scale degrees, starting at middle C as degree 0 (C = 0, D = 1, E = 2 and so on, seven degrees per octave). **Chord Octave** moves the starting key. Black keys are ignored.
 - **Direct:** notes pass through unchanged, still polyphonic. Use it when you want the keyboard to play normally.
-- **Auto:** you just play, and the plugin finds the scale. See below.
+- **Auto:** you just play, and the plugin finds or adapts the scale. See below.
 
 In every mode except Direct, each held key owns its own chord. The scale root, degree and mode follow the most recently pressed key, while the chords of the other held keys keep sounding.
 
 ### Auto mode
 
-In Auto mode the plugin looks at all the keys you are holding. If they all belong to the live scale, the scale stays as it is. If not, it looks for the closest scale that contains them all and switches to it. The chord is then built on the scale degree of the key you pressed last, in that key's octave. "Closest" is measured as the total semitone distance between the two scales' notes. If no candidate contains every held note, the scale is left alone.
+In Auto mode the plugin looks at all the keys you are holding. If they all belong to the live scale, the scale stays as it is. If not, it changes the scale so that it contains them. The chord is then built on the scale degree of the key you pressed last, in that key's octave.
 
 The **Sub-mode** decides what can change:
 
 - **Modal Interchange:** the scale is rotated through its own modes. The candidates are the modes of the scale you started with, all on the same root (C major, C Dorian and so on). The editor shows the name of the new scale.
 - **Modulation:** the scale keeps its mode and is transposed. All twelve transpositions are candidates. The editor shows the new root.
+- **Adapt:** the scale keeps its number of notes but is reshaped around what you play. Each held pitch class (oldest first) takes over the closest scale note that has not been used yet and lands inside the octave of the original scale, so the scale never widens and the chords stay in range. When two scale notes are equally close, the one that leaves the smallest largest gap between neighbouring notes wins, then the one nearer the edge of the scale. The adapted scale stays in place when you release the keys and keeps adapting as you play more notes. The editor names it, for example `C#  Altered Dominant`.
+
+For Modal Interchange and Modulation, "closest" is measured as the total semitone distance between the two scales' notes. If no candidate contains every held note, the scale is left alone. Adapt always finds a scale.
 
 **Distance From** decides what "closest" is measured against:
 
-- **Original:** the initial scale (see below).
-- **Current:** the scale that is sounding right now. This is the default, and it makes the scale drift by small steps as you play.
+- **Original:** the initial scale (see below). In Adapt, each new set of notes reshapes the initial scale from scratch, ignoring earlier adaptations.
+- **Current:** the scale that is sounding right now. This is the default, and it makes the scale drift by small steps as you play. In Adapt, each new note reshapes the scale that is already adapted, so the changes accumulate.
 
-The **initial scale** is the mode, transposition and chord degree you had when you switched to Auto. Changing the **Mode** slider by hand while in Auto sets a new initial scale, and so does changing the **Root** in Modulation.
+Adapt remembers its own Distance From setting, separately from Modal Interchange and Modulation. Both default to Current.
+
+The **initial scale** is the mode, transposition and chord degree you had when you switched to Auto. Changing the **Mode** slider by hand while in Auto sets a new initial scale, and so does changing the **Root** in Modulation. In Adapt, changing any Scale or Scale Transform control restarts the adaptation from the new scale.
 
 Three things return you to the initial scale:
 
 - The **Reset** button (or the **Reset Auto** action), which also stops the sounding chords.
 - **Autoreset**, when on: it resets whenever you press a key while no other key is held, before the scale is chosen.
 - Leaving Auto mode, or switching the Sub-mode.
+
+In Adapt, returning to the initial scale also drops the adapted scale.
 
 ### Usage
 
@@ -378,10 +395,11 @@ All of these are sliders, so they can be automated. **Input**:
 | Control | Range | What it does |
 | --- | --- | --- |
 | Input: Mode | Root, Degree, Direct, Auto | How a played key drives the chord |
-| Input: Auto Sub-mode | Modal Interchange, Modulation | What Auto mode is allowed to change |
-| Input: Auto Distance From | Original, Current | What Auto mode measures the closest scale against |
+| Input: Auto Sub-mode | Modal Interchange, Modulation, Adapt | What Auto mode is allowed to change |
+| Input: Auto Distance From | Original, Current | What Auto mode measures against. In Adapt it is the scale that gets reshaped. Adapt keeps its own setting |
 | Input: Auto Autoreset | Off, On | Return to the initial scale on every fresh key press |
 | Input: Common Notes | Hold, Retrigger | What happens to a note that two chords share |
+| Note names: Accidentals | Auto, Sharps, Flats | How notes are spelled: fitted to the scale, always sharps or always flats |
 | Output Channel | Same as input, 1 to 16 | MIDI channel of the output notes |
 | Action | -, Reset Auto, Reset Voice-Leading | Momentary actions (these are the **Reset** and **Reset memory** buttons) |
 
@@ -438,7 +456,7 @@ All of these are sliders, so they can be automated. **Input**:
 
 The chord rule lists (degrees, interval steps) and the custom scale are not sliders, but they are saved with the project and with FX presets. The search box in the library list is not saved.
 
-The 38 sliders appear in this order: Scale source (5), Scale transform (7), Chord (5), Chord transform (14), then Input and Output (7). Reordering them changes how saved presets and automation map to the controls.
+The 39 sliders appear in this order: Scale source (5), Scale transform (7), Chord (5), Chord transform (14), then Input and Output (8). Reordering them changes how saved presets and automation map to the controls.
 
 ### Defaults
 
@@ -446,9 +464,10 @@ The 38 sliders appear in this order: Scale source (5), Scale transform (7), Chor
 | --- | --- |
 | Input: Mode | Root |
 | Input: Auto Sub-mode | Modal Interchange |
-| Input: Auto Distance From | Current |
+| Input: Auto Distance From | Current (for every sub-mode, Adapt included) |
 | Input: Auto Autoreset | Off |
 | Input: Common Notes | Hold |
+| Note names: Accidentals | Auto |
 | Output Channel | Same as input |
 | Scale: Source | Library |
 | Scale: Library | Major and minor, Ionian (Major) |
