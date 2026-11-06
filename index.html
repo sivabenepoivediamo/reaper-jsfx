@@ -62,7 +62,7 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 <h1>reaper<span class="dim"> jsfx</span></h1>
 <p class="lead">Experiments with JSFX, REAPER's scripting format for audio and MIDI effects. Two MIDI harmony tools and three pedal-inspired audio effects, each in a single file you can copy into REAPER.</p>
 <p>This is a personal playground, so expect rough edges. Ideas and bug reports are welcome: open an issue if something sounds wrong.</p>
-<nav aria-label="Sections"><a class="nav-pill" href="#install">Install</a><a class="nav-pill" href="#download">Download</a><a class="nav-pill" href="#block-chords">Block Chords</a><a class="nav-pill" href="#fz1">Maestro FZ-1</a><a class="nav-pill" href="#rangemaster">Rangemaster</a><a class="nav-pill" href="#ce1">Boss CE-1</a><a class="nav-pill" href="#harmony">Harmony</a><a class="nav-pill" href="#dev">Dev notes</a></nav>
+<nav aria-label="Sections"><a class="nav-pill" href="#install">Install</a><a class="nav-pill" href="#download">Download</a><a class="nav-pill" href="#harmony">Harmony</a><a class="nav-pill" href="#block-chords">Block Chords</a><a class="nav-pill" href="#ce1">Boss CE-1</a><a class="nav-pill" href="#rangemaster">Rangemaster</a><a class="nav-pill" href="#fz1">Maestro FZ-1</a><a class="nav-pill" href="#dev">Dev notes</a></nav>
 
 <section id="install" class="p">
 <h2>Install</h2>
@@ -84,198 +84,13 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 <h3>Single files</h3>
 <div class="tw"><table>
 <tr><th>Effect<th>Type<th>File
-<tr><td>Block Chords<td>MIDI<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Block%20Chords.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Block%20Chords.jsfx">View source</a>
-<tr><td>Maestro FZ-1 Fuzz-Tone<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">View source</a>
-<tr><td>Dallas Arbiter Rangemaster Treble Booster<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">View source</a>
-<tr><td>Boss CE-1 Chorus Ensemble<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">View source</a>
 <tr><td>Harmony<td>MIDI<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Harmony.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Harmony.jsfx">View source</a>
+<tr><td>Block Chords<td>MIDI<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Block%20Chords.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Block%20Chords.jsfx">View source</a>
+<tr><td>Boss CE-1 Chorus Ensemble<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">View source</a>
+<tr><td>Dallas Arbiter Rangemaster Treble Booster<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">View source</a>
+<tr><td>Maestro FZ-1 Fuzz-Tone<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">View source</a>
 </table></div>
 <p class="note">If a file opens as text in the browser, use Save link as, or save the page with <kbd>Ctrl</kbd>+<kbd>S</kbd>, and keep the <code>.jsfx</code> extension.</p>
-</section>
-
-<!-- ============ BLOCK CHORDS ============ -->
-<section id="block-chords" class="p m">
-<span class="tag">MIDI effect</span>
-<h2>Block Chords</h2>
-<p>Turns single-note melodies into block chords. Every note you play is treated as the top voice of the melody. A port of the "blockchords" web tool.</p>
-<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Block%20Chords.jsfx">Download Block Chords.jsfx</a>
-
-<details open><summary>User manual</summary>
-<h3>Quick start</h3>
-<ol><li>Put the effect on a MIDI track, before your instrument.</li><li>Pick a <b>root</b>, a <b>scale</b> and a <b>base shape</b>.</li><li>Play single notes. Each one comes out as a chord.</li></ol>
-<h3>How a note is harmonized</h3>
-<ul>
-<li><b>Notes in the base shape</b> use the inversion of that shape that puts the melody note on top.</li>
-<li><b>Other scale degrees</b> get descending thirds along the scale. A voice that would form a tritone with the melody moves up one scale step.</li>
-<li><b>Notes outside both</b> are treated as a chromatic alteration of the nearest in-scale note. You choose whether the whole chord moves with it or only the melody note.</li>
-<li><b>Bass doubling</b> adds the melody an octave below. <b>Drop 2 / 3 / 4</b> move the second, third or fourth voice an octave below that doubling.</li>
-</ul>
-<p>Overlapping chords share notes safely: releasing one chord never cuts a note another chord still holds. Notes outside the harmonize range pass through unchanged.</p>
-<h3>Controls</h3>
-<div class="tw"><table>
-<tr><th>Control<th>What it does
-<tr><td>Root (key)<td>C to B. Applies to both the scale and the base shape.
-<tr><td>Scale category + list<td>Pick a category, then a scale in the matching list. Categories: major and minor modes, European, Asian, Indian (three lists), pentatonic, modal (two lists), jazz, symmetric, misc.
-<tr><td>Custom scale toggles<td>Choose <b>Custom</b> as the category to reveal 12 toggles (relative to the root).
-<tr><td>Base shape category + list<td>Triads, sixths, sevenths, ninths, elevenths, thirteenths, altered dominants, suspended and added tone, symmetric and cluster, polychords and hybrids, classical chromatic harmony.
-<tr><td>Custom shape toggles<td>Choose <b>Custom</b> as the shape category for 12 toggles.
-<tr><td>Drop voice 2 / 3 / 4<td>Drops that voice an octave below the bass doubling.
-<tr><td>Out-of-scale notes: transpose whole chord<td>On: the chord moves with the alteration. Off: only the melody note changes.
-<tr><td>Bass doubling<td>Adds the melody an octave below.
-<tr><td>Harmony velocity<td>10 to 150% of the melody velocity.
-<tr><td>Harmonize from / up to<td>MIDI note range that gets harmonized. Others pass through.
-</table></div>
-<p><b>Defaults:</b> root C, Ionian (Major), Major Sixth (6), velocity 85%, range 60 to 127, transpose whole chord on, bass doubling on, drops off.</p>
-</details>
-
-<details><summary>Developer notes</summary>
-<ul>
-<li><b>Slider map:</b> 1 root, 2 scale category, 3 to 14 one picker per scale category (12 groups, <code>SB = 3</code>), 15 to 26 custom scale toggles (<code>CSB = 15</code>), 27 shape category (<code>CGRP</code>), 28 to 38 one picker per shape category (<code>HB = 28</code>), 39 to 50 custom shape toggles (<code>CHB = 39</code>), 51 to 53 drops, 54 transpose, 55 bass doubling, 56 velocity, 57 and 58 range. <code>@slider</code> hides the pickers that do not apply with <code>slider_show</code>.</li>
-<li><b>Library format:</b> each scale or shape is a 12-bit mask (bit <em>b</em> set means <em>b</em> semitones above the root). Masks are loaded with <code>ls()</code> and <code>lh()</code> in <code>@init</code> into <code>LS</code> (1000) and <code>LH</code> (2000). <code>GSS[]</code> and <code>GSC[]</code> hold the first library index of each category.</li>
-<li><b>Adding a scale:</b> insert the mask with <code>ls()</code> at the end of its category, shift the later <code>GSS</code> entries, then raise that picker's slider range and add its name in the slider definition. The list order must match the mask order.</li>
-<li><b>Core functions:</b> <code>harm_shape()</code> builds the inversion with the melody on top. <code>step_scale()</code> moves a note by scale steps and returns -9999 if the note is not in the scale. <code>harmonize()</code> assembles <code>OUT[]</code> including alteration, bass doubling and drops.</li>
-<li><b>Note bookkeeping:</b> <code>CNT[ch*128+note]</code> counts the chord notes per held input note. <code>STORE</code> keeps up to 8 output pitches per input note. <code>REFC</code> reference-counts output pitches: a note-on resends a note-off first if the count is above 0, and a note-off is sent only when the count returns to 0. CC 120 and 123 clear the counters for that channel.</li>
-<li>Named strings are not accessible inside functions, so string handles (<code>NMS</code>, <code>CHS</code>) are assigned in <code>@init</code> and used as globals.</li>
-</ul>
-</details>
-</section>
-
-<!-- ============ FZ-1 ============ -->
-<section id="fz1" class="p">
-<span class="tag">Audio effect</span>
-<h2>Maestro FZ-1 Fuzz-Tone</h2>
-<p>A stereo fuzz inspired by the Maestro FZ-1. The two channels are processed independently, so it works on mono or stereo tracks.</p>
-<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">Download Maestro FZ-1 Fuzz Tone.jsfx</a>
-
-<details open><summary>User manual</summary>
-<h3>Quick start</h3>
-<ol><li>Put it on an audio track, ideally first in the chain so it sees the raw instrument.</li><li>Set <b>Fuzz</b> for the amount and <b>Volume</b> to match your level.</li><li>Shape the sound with <b>Bias</b>, <b>Tone</b> and <b>Sag</b>.</li></ol>
-<h3>Controls</h3>
-<div class="tw"><table>
-<tr><th>Control<th>Range<th>What it does
-<tr><td>Fuzz<td>0 to 100<td>Drive. Raises the first-stage gain from -6 dB to +44 dB and lowers the pre-clip low-pass from 9 kHz to 4 kHz.
-<tr><td>Volume (dB)<td>-40 to +12<td>Level of the processed signal.
-<tr><td>Bias<td>0 to 100<td>DC offset ahead of the clippers, for more asymmetric clipping. High settings get ragged and can starve the signal.
-<tr><td>Tone<td>0 to 100<td>Output low-pass from about 1 kHz to 12 kHz.
-<tr><td>Sag<td>0 to 100<td>Level-dependent bias drop in the second stage. Loud passages compress and thin out, and notes can sputter as they decay.
-<tr><td>Mix (%)<td>0 to 100<td>Dry/wet blend. Volume only affects the wet signal.
-</table></div>
-<p><b>Defaults:</b> Fuzz 60, Volume -12 dB, Bias 35, Tone 50, Sag 25, Mix 100.</p>
-<h3>Signal path</h3>
-<p>90 Hz input high-pass, first clipper, 250 Hz coupling high-pass, a low-pass that darkens with Fuzz, a second clipper with envelope-driven bias sag (about 2 ms attack, 150 ms release), tone low-pass, 20 Hz DC blocker. Both clippers are asymmetric: the positive half clips softly and the negative half has a lower ceiling, which adds even-order harmonics. The fuzz path runs at 2x oversampling.</p>
-</details>
-
-<details><summary>Developer notes</summary>
-<ul>
-<li><b>Sliders:</b> 1 Fuzz, 2 Volume, 3 Bias, 4 Tone, 5 Sag, 6 Mix. All coefficients are computed in <code>@slider</code> at twice the sample rate (<code>fs2 = 2*srate</code>).</li>
-<li><b>Structure:</b> <code>fz()</code> is an instance function (state in <code>z1..z5</code>, <code>env</code>). Each channel is an instance (<code>chL</code>, <code>chR</code>) configured by <code>fz_set()</code>. Parameters are passed as arguments so both channels share the same coefficients.</li>
-<li><b>Nonlinearity:</b> <code>tanhf()</code> is a rational tanh approximation that is exactly +/-1 beyond |x| = 3. <code>ge()</code> uses it for the positive half and <code>0.7*tanhf(x/0.7)</code> for the negative half.</li>
-<li><b>Oversampling:</b> each input sample produces two fuzz outputs. The first uses the average of the previous and current input (linear interpolation), the second uses the input itself. A 4th-order Butterworth low-pass at 0.45 x <code>srate</code> (two biquads, Q 0.5412 and 1.3066, run at <code>fs2</code>) filters both. The first output is discarded after being run through the filter, and the second is the output sample.</li>
-<li><b>Sag:</b> the envelope follower tracks the post-filter signal and subtracts <code>sg*env</code> from the second stage's bias.</li>
-<li><b>Adding a control:</b> add a <code>sliderN</code> line at the end (so existing presets keep their mapping), compute its coefficient in <code>@slider</code>, and pass it through <code>fz_set()</code>.</li>
-</ul>
-</details>
-</section>
-
-<!-- ============ RANGEMASTER ============ -->
-<section id="rangemaster" class="p">
-<span class="tag">Audio effect</span>
-<h2>Dallas Arbiter Rangemaster Treble Booster</h2>
-<p>A stereo treble booster inspired by the single germanium transistor pedal behind many 1960s and 70s lead tones.</p>
-<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">Download Dallas Arbiter Rangemaster Treble Booster.jsfx</a>
-
-<details open><summary>User manual</summary>
-<h3>Quick start</h3>
-<ol><li>Put it on an audio track, first in the chain, before any amp sim or other drive.</li><li>Set <b>Range</b> for the boost and <b>Output</b> to match your level.</li><li>Shape the tone with <b>Input Cap</b> and <b>Hi-Cut</b>, and the clipping with <b>Bias</b>, <b>Germanium Asymmetry</b> and <b>Battery</b>.</li></ol>
-<p>At defaults the small-signal response runs from about -14 dB at 100 Hz to about +9 dB at 4 kHz. Very quiet signals (-40 dBFS or lower) stay fairly clean even at full Range, while a typical guitar DI (-20 to -10 dBFS) drives the stage much harder. If it is too clean, raise Input Trim, lower Battery or raise Bias. The graph shows the linear response only, so it does not react to Bias, Asymmetry, Battery or Warmth. Feed it a DI'd guitar: the interaction with a real pickup is not modelled.</p>
-<h3>Controls</h3>
-<div class="tw"><table>
-<tr><th>Control<th>Range<th>What it does
-<tr><td>Range<td>0 to 10<td>Stage gain, about -4 dB to +26 dB. Also sets how hard the transistor is driven.
-<tr><td>Input Cap (nF)<td>1 to 100<td>Input coupling cap. Stock is 5 nF. Try 10 to 47 nF for the "fuller" mod.
-<tr><td>Transistor hFE<td>30 to 150<td>Sets input impedance and so the input high-pass corner (higher hFE, lower corner), plus a slight gain change.
-<tr><td>Bias (%)<td>-50 to +50<td>Shifts the operating point. Away from 0 the half-waves clip unevenly. Positive and negative are mirror images.
-<tr><td>Germanium Asymmetry (%)<td>0 to 100<td>How much more headroom one half-wave has. 0 is symmetric.
-<tr><td>Battery (V)<td>4 to 9.6<td>Supply voltage. A weaker battery clips earlier and sounds more compressed.
-<tr><td>Hi-Cut (Hz)<td>2000 to 20000<td>One-pole low-pass after the clipper.
-<tr><td>Input Trim (dB)<td>-24 to +24<td>Level into the stage.
-<tr><td>Output (dB)<td>-36 to +12<td>Level out.
-<tr><td>Warmth (%)<td>0 to 100<td>Extra even-order harmonics.
-<tr><td>Oversampling<td>Off, 2x, 4x, 8x<td>Higher is cleaner and uses more CPU.
-</table></div>
-<p><b>Defaults:</b> Range 7, Input Cap 5 nF, hFE 75, Bias 0, Asymmetry 60, Battery 9 V, Hi-Cut 12000 Hz, Trim 0, Output -6 dB, Warmth 25, Oversampling 4x.</p>
-</details>
-
-<details><summary>Developer notes</summary>
-<ul>
-<li><b>Sliders:</b> 1 Range, 2 Input Cap (log), 3 hFE, 4 Bias, 5 Asymmetry, 6 Battery, 7 Hi-Cut (log), 8 Trim, 9 Output, 10 Warmth, 11 Oversampling index (0 to 3, factor = 2^index).</li>
-<li><b>Memory map:</b> 0 to 14 oversampling filter coefficients (3 biquads x 5), 100+ upsampling states (6 per channel), 120+ downsampling states (6 per channel), 200+ one-pole states (8 per channel).</li>
-<li><b>Input network:</b> a one-pole high-pass with <code>rin = 59.4k || (hFE*500)</code> and the input cap. The corner is clamped to 0.45 x <code>srate</code>. Output coupling is 20 nF into 150k (about 53 Hz) and also removes the DC from asymmetric clipping.</li>
-<li><b>Clipper:</b> <code>sh(x, hpos, hneg)</code> is an asymmetric tanh saturator. Headroom <code>hp = 0.5*battery/9</code> and <code>hn = hp*(1 + 1.2*asym)</code>. <code>vb</code> shifts the operating point and <code>y0</code> is the static offset subtracted afterwards. Warmth adds <code>0.4*warm*v*v</code>.</li>
-<li><b>Oversampling:</b> zero-stuff by <code>osf</code> (input scaled by <code>osf</code>), filter with a 6th-order Butterworth made of three biquads (Q 0.5176, 0.7071, 1.9319) at <code>min(0.45*srate, 20000)</code>, clip, filter again and keep the first output of each group. IIR filters, so no latency is reported.</li>
-<li><b>Smoothing:</b> gain and output are smoothed with a 10 ms one-pole to avoid zipper noise.</li>
-<li>The component values were tuned by ear. Change them in <code>@slider</code> (the <code>rin</code>, <code>fc_out</code> and headroom lines).</li>
-</ul>
-</details>
-</section>
-
-<!-- ============ CE-1 ============ -->
-<section id="ce1" class="p">
-<span class="tag">Audio effect</span>
-<h2>Boss CE-1 Chorus Ensemble</h2>
-<p>A chorus and vibrato inspired by the 1976 CE-1. A modulated delay line stands in for the original's bucket-brigade chip.</p>
-<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">Download Boss CE-1 Chorus Ensemble.jsfx</a>
-
-<details open><summary>User manual</summary>
-<h3>Quick start</h3>
-<ol><li>Put it on track with audio content.</li><li>Choose <b>Chorus</b> or <b>Vibrato</b> with <b>Mode</b>.</li><li>Chorus: set <b>Chorus Intensity</b>, which sets the speed, not the depth. Vibrato: set <b>Vibrato Rate</b> and <b>Vibrato Depth</b>.</li><li>Choose an <b>Output Mode</b> and match the level with <b>Output</b>.</li></ol>
-<h3>The two modes</h3>
-<ul>
-<li><b>Chorus:</b> only Chorus Intensity is active. It sets the LFO rate (about 1 to 3 Hz). The delay sweep is fixed (3 to 5 ms). The output is the direct signal plus the delayed signal, each at -3 dB.</li>
-<li><b>Vibrato:</b> Vibrato Rate (3.2 to 11.6 Hz) and Vibrato Depth are active. The dry signal is muted for a true pitch vibrato. At default settings the swing is roughly +/-40 cents at depth 10 and 5 Hz, and roughly +/-95 cents at depth 10 and the fastest rate.</li>
-</ul>
-<h3>Output modes</h3>
-<ul>
-<li><b>Mono Mix:</b> one output. The stereo input is summed first.</li>
-<li><b>Classic Stereo (default):</b> left is the Direct output, right is the Effect output (wet only), like the original's two jacks.</li>
-<li><b>Dual:</b> two CE-1s, one per input channel, with LFOs 90 degrees apart. The input stays stereo.</li>
-</ul>
-<h3>Controls</h3>
-<div class="tw"><table>
-<tr><th>Control<th>Range<th>What it does
-<tr><td>Mode<td>Chorus, Vibrato<td>Selects the effect. Only that mode's controls are active.
-<tr><td>Chorus Intensity<td>0 to 10<td>Chorus only. LFO rate, 1 to 3 Hz (exponential).
-<tr><td>Vibrato Rate<td>0 to 10<td>Vibrato only. Rate between Vibrato Rate Min and Max.
-<tr><td>Vibrato Depth<td>0 to 10<td>Vibrato only. Widens the delay sweep.
-<tr><td>Input Sensitivity<td>80 mV, 10 mV<td>10 mV adds 18 dB into the preamp. Use it for quiet sources.
-<tr><td>Level<td>0 to 10<td>Level into the preamp. 7 is unity, 10 is about +6 dB. Higher clips harder.
-<tr><td>Output Mode<td>3 options<td>See above.
-<tr><td>Output (dB)<td>-24 to +12<td>Level out.
-<tr><td>BBD Bandwidth (kHz)<td>3 to 16<td>Low-pass on the delayed signal. Lower sounds darker, like a worn BBD.
-<tr><td>BBD Noise (%)<td>0 to 100<td>Hiss on the delayed signal. 100% is about -60 dB.
-<tr><td>LFO Drift (%)<td>0 to 100<td>Slow random wander of the LFO rate. 100% is about +/-5%.
-<tr><td>Min Delay (ms)<td>1 to 6<td>Shortest delay, where the sweep starts.
-<tr><td>Chorus Sweep Max (ms)<td>3 to 9<td>Longest delay in Chorus mode.
-<tr><td>Chorus LFO Shape<td>0 to 100<td>Blends the LFO from triangle (0) to sine (100). Higher softens pitch changes at the sweep ends.
-<tr><td>Vibrato Sweep Max @ Depth 0 / 10 (ms)<td>3 to 9<td>Longest delay in Vibrato mode at depth 0 and depth 10. Raise the second for wilder vibrato.
-<tr><td>Vibrato Rate Min / Max (Hz)<td>0.5 to 20 / 1 to 30<td>LFO rate at Vibrato Rate 0 and 10.
-</table></div>
-<p><b>Defaults:</b> Chorus mode, Intensity 5, Vibrato Rate 5, Depth 5, 80 mV, Level 7, Classic Stereo, Output 0 dB, bandwidth 9 kHz, noise 0, drift 25, min delay 3 ms, chorus sweep 5 ms, shape 50, vibrato sweep 3.3 to 4.5 ms, vibrato rate 3.2 to 11.6 Hz.</p>
-<p class="note">The rate and delay ranges come from one published measurement of a single unit, so they are not verified. The advanced sliders let you match a real CE-1. The preamp is not oversampled, so very high Level or the Mic setting with a hot input can alias slightly.</p>
-</details>
-
-<details><summary>Developer notes</summary>
-<ul>
-<li><b>Sliders (18):</b> 1 to 4 main, 5 to 8 input and output, 9 to 11 sound character, 12 to 18 advanced tuning. Sliders are declared as <code>slider1:mode_sw=0&lt;...&gt;</code>, so each has a named variable.</li>
-<li><b>Delay law:</b> <code>delay = dmin / (1 - k*u)</code> with <code>k = 1 - dmin/dmax</code> and <code>u</code> the LFO in 0 to 1, which mimics a clock-modulated BBD (delay is inversely proportional to clock rate). Reads use 4-point Hermite interpolation in <code>readtap()</code>.</li>
-<li><b>Buffers:</b> two delay lines of 16384 samples in memory (line A at 0, line B at <code>BUFSIZE</code>), written at <code>wp</code>. Line B is only read in Dual mode.</li>
-<li><b>LFO:</b> <code>lfoshape(p, m)</code> blends triangle and sine. Phase B is offset by 0.25 for Dual. Drift is a smoothed random target, redrawn every 0.3 s, scaling the rate by up to +/-5%.</li>
-<li><b>Preamp:</b> <code>tanh_(x*g_pre + 0.15)</code> minus its DC value, normalised by <code>pnorm</code> so small signals have unity gain. <code>g_pre = g_sens * (level/7)^2</code>.</li>
-<li><b>Smoothing:</b> rate, delay, shape and dry/wet gains use a 30 ms one-pole (<code>smc</code>) toward targets set in <code>@slider</code>, so changing mode does not click.</li>
-<li><b>BBD filter:</b> two cascaded one-poles at the bandwidth setting (clamped to 0.45 x <code>srate</code>). Noise is added before them.</li>
-<li><b>Output:</b> <code>omode</code> 0 mono mix, 1 Direct/Effect, 2 Dual. No oversampling around the preamp, which is the known aliasing limitation.</li>
-</ul>
-</details>
 </section>
 
 <!-- ============ HARMONY ============ -->
@@ -342,6 +157,191 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 <li><b>Spread:</b> EEL2 has no recursion, so <code>spread_dfs()</code> is an iterative backtracking search (capped at 20000 nodes, strict pass first, then relaxed). Spread works up to 16 notes.</li>
 <li><b>Persistence:</b> <code>@serialize</code> saves the three lists (<code>A_CRP</code>, <code>A_CRI</code>, <code>A_SCP</code>) with their lengths. <code>lists_ver</code> triggers a rebuild after loading.</li>
 <li><b>GUI:</b> <code>@gfx 1010 530</code> draws at a fixed design size scaled by <code>uis</code>. Helpers include <code>btn</code>, <code>stepper</code>, <code>chips</code>, <code>tf_run</code> (text field) and <code>draw_kbd</code>. Coordinates go through <code>fr()</code> and <code>ft()</code>, which apply the scale and offset.</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ BLOCK CHORDS ============ -->
+<section id="block-chords" class="p m">
+<span class="tag">MIDI effect</span>
+<h2>Block Chords</h2>
+<p>Turns single-note melodies into block chords. Every note you play is treated as the top voice of the melody. A port of the "blockchords" web tool.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Block%20Chords.jsfx">Download Block Chords.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put the effect on a MIDI track, before your instrument.</li><li>Pick a <b>root</b>, a <b>scale</b> and a <b>base shape</b>.</li><li>Play single notes. Each one comes out as a chord.</li></ol>
+<h3>How a note is harmonized</h3>
+<ul>
+<li><b>Notes in the base shape</b> use the inversion of that shape that puts the melody note on top.</li>
+<li><b>Other scale degrees</b> get descending thirds along the scale. A voice that would form a tritone with the melody moves up one scale step.</li>
+<li><b>Notes outside both</b> are treated as a chromatic alteration of the nearest in-scale note. You choose whether the whole chord moves with it or only the melody note.</li>
+<li><b>Bass doubling</b> adds the melody an octave below. <b>Drop 2 / 3 / 4</b> move the second, third or fourth voice an octave below that doubling.</li>
+</ul>
+<p>Overlapping chords share notes safely: releasing one chord never cuts a note another chord still holds. Notes outside the harmonize range pass through unchanged.</p>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>What it does
+<tr><td>Root (key)<td>C to B. Applies to both the scale and the base shape.
+<tr><td>Scale category + list<td>Pick a category, then a scale in the matching list. Categories: major and minor modes, European, Asian, Indian (three lists), pentatonic, modal (two lists), jazz, symmetric, misc.
+<tr><td>Custom scale toggles<td>Choose <b>Custom</b> as the category to reveal 12 toggles (relative to the root).
+<tr><td>Base shape category + list<td>Triads, sixths, sevenths, ninths, elevenths, thirteenths, altered dominants, suspended and added tone, symmetric and cluster, polychords and hybrids, classical chromatic harmony.
+<tr><td>Custom shape toggles<td>Choose <b>Custom</b> as the shape category for 12 toggles.
+<tr><td>Drop voice 2 / 3 / 4<td>Drops that voice an octave below the bass doubling.
+<tr><td>Out-of-scale notes: transpose whole chord<td>On: the chord moves with the alteration. Off: only the melody note changes.
+<tr><td>Bass doubling<td>Adds the melody an octave below.
+<tr><td>Harmony velocity<td>10 to 150% of the melody velocity.
+<tr><td>Harmonize from / up to<td>MIDI note range that gets harmonized. Others pass through.
+</table></div>
+<p><b>Defaults:</b> root C, Ionian (Major), Major Sixth (6), velocity 85%, range 60 to 127, transpose whole chord on, bass doubling on, drops off.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Slider map:</b> 1 root, 2 scale category, 3 to 14 one picker per scale category (12 groups, <code>SB = 3</code>), 15 to 26 custom scale toggles (<code>CSB = 15</code>), 27 shape category (<code>CGRP</code>), 28 to 38 one picker per shape category (<code>HB = 28</code>), 39 to 50 custom shape toggles (<code>CHB = 39</code>), 51 to 53 drops, 54 transpose, 55 bass doubling, 56 velocity, 57 and 58 range. <code>@slider</code> hides the pickers that do not apply with <code>slider_show</code>.</li>
+<li><b>Library format:</b> each scale or shape is a 12-bit mask (bit <em>b</em> set means <em>b</em> semitones above the root). Masks are loaded with <code>ls()</code> and <code>lh()</code> in <code>@init</code> into <code>LS</code> (1000) and <code>LH</code> (2000). <code>GSS[]</code> and <code>GSC[]</code> hold the first library index of each category.</li>
+<li><b>Adding a scale:</b> insert the mask with <code>ls()</code> at the end of its category, shift the later <code>GSS</code> entries, then raise that picker's slider range and add its name in the slider definition. The list order must match the mask order.</li>
+<li><b>Core functions:</b> <code>harm_shape()</code> builds the inversion with the melody on top. <code>step_scale()</code> moves a note by scale steps and returns -9999 if the note is not in the scale. <code>harmonize()</code> assembles <code>OUT[]</code> including alteration, bass doubling and drops.</li>
+<li><b>Note bookkeeping:</b> <code>CNT[ch*128+note]</code> counts the chord notes per held input note. <code>STORE</code> keeps up to 8 output pitches per input note. <code>REFC</code> reference-counts output pitches: a note-on resends a note-off first if the count is above 0, and a note-off is sent only when the count returns to 0. CC 120 and 123 clear the counters for that channel.</li>
+<li>Named strings are not accessible inside functions, so string handles (<code>NMS</code>, <code>CHS</code>) are assigned in <code>@init</code> and used as globals.</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ CE-1 ============ -->
+<section id="ce1" class="p">
+<span class="tag">Audio effect</span>
+<h2>Boss CE-1 Chorus Ensemble</h2>
+<p>A chorus and vibrato inspired by the 1976 CE-1. A modulated delay line stands in for the original's bucket-brigade chip.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">Download Boss CE-1 Chorus Ensemble.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put it on track with audio content.</li><li>Choose <b>Chorus</b> or <b>Vibrato</b> with <b>Mode</b>.</li><li>Chorus: set <b>Chorus Intensity</b>, which sets the speed, not the depth. Vibrato: set <b>Vibrato Rate</b> and <b>Vibrato Depth</b>.</li><li>Choose an <b>Output Mode</b> and match the level with <b>Output</b>.</li></ol>
+<h3>The two modes</h3>
+<ul>
+<li><b>Chorus:</b> only Chorus Intensity is active. It sets the LFO rate (about 1 to 3 Hz). The delay sweep is fixed (3 to 5 ms). The output is the direct signal plus the delayed signal, each at -3 dB.</li>
+<li><b>Vibrato:</b> Vibrato Rate (3.2 to 11.6 Hz) and Vibrato Depth are active. The dry signal is muted for a true pitch vibrato. At default settings the swing is roughly +/-40 cents at depth 10 and 5 Hz, and roughly +/-95 cents at depth 10 and the fastest rate.</li>
+</ul>
+<h3>Output modes</h3>
+<ul>
+<li><b>Mono Mix:</b> one output. The stereo input is summed first.</li>
+<li><b>Classic Stereo (default):</b> left is the Direct output, right is the Effect output (wet only), like the original's two jacks.</li>
+<li><b>Dual:</b> two CE-1s, one per input channel, with LFOs 90 degrees apart. The input stays stereo.</li>
+</ul>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>Range<th>What it does
+<tr><td>Mode<td>Chorus, Vibrato<td>Selects the effect. Only that mode's controls are active.
+<tr><td>Chorus Intensity<td>0 to 10<td>Chorus only. LFO rate, 1 to 3 Hz (exponential).
+<tr><td>Vibrato Rate<td>0 to 10<td>Vibrato only. Rate between Vibrato Rate Min and Max.
+<tr><td>Vibrato Depth<td>0 to 10<td>Vibrato only. Widens the delay sweep.
+<tr><td>Input Sensitivity<td>80 mV, 10 mV<td>10 mV adds 18 dB into the preamp. Use it for quiet sources.
+<tr><td>Level<td>0 to 10<td>Level into the preamp. 7 is unity, 10 is about +6 dB. Higher clips harder.
+<tr><td>Output Mode<td>3 options<td>See above.
+<tr><td>Output (dB)<td>-24 to +12<td>Level out.
+<tr><td>BBD Bandwidth (kHz)<td>3 to 16<td>Low-pass on the delayed signal. Lower sounds darker, like a worn BBD.
+<tr><td>BBD Noise (%)<td>0 to 100<td>Hiss on the delayed signal. 100% is about -60 dB.
+<tr><td>LFO Drift (%)<td>0 to 100<td>Slow random wander of the LFO rate. 100% is about +/-5%.
+<tr><td>Min Delay (ms)<td>1 to 6<td>Shortest delay, where the sweep starts.
+<tr><td>Chorus Sweep Max (ms)<td>3 to 9<td>Longest delay in Chorus mode.
+<tr><td>Chorus LFO Shape<td>0 to 100<td>Blends the LFO from triangle (0) to sine (100). Higher softens pitch changes at the sweep ends.
+<tr><td>Vibrato Sweep Max @ Depth 0 / 10 (ms)<td>3 to 9<td>Longest delay in Vibrato mode at depth 0 and depth 10. Raise the second for wilder vibrato.
+<tr><td>Vibrato Rate Min / Max (Hz)<td>0.5 to 20 / 1 to 30<td>LFO rate at Vibrato Rate 0 and 10.
+</table></div>
+<p><b>Defaults:</b> Chorus mode, Intensity 5, Vibrato Rate 5, Depth 5, 80 mV, Level 7, Classic Stereo, Output 0 dB, bandwidth 9 kHz, noise 0, drift 25, min delay 3 ms, chorus sweep 5 ms, shape 50, vibrato sweep 3.3 to 4.5 ms, vibrato rate 3.2 to 11.6 Hz.</p>
+<p class="note">The rate and delay ranges come from one published measurement of a single unit, so they are not verified. The advanced sliders let you match a real CE-1. The preamp is not oversampled, so very high Level or the Mic setting with a hot input can alias slightly.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Sliders (18):</b> 1 to 4 main, 5 to 8 input and output, 9 to 11 sound character, 12 to 18 advanced tuning. Sliders are declared as <code>slider1:mode_sw=0&lt;...&gt;</code>, so each has a named variable.</li>
+<li><b>Delay law:</b> <code>delay = dmin / (1 - k*u)</code> with <code>k = 1 - dmin/dmax</code> and <code>u</code> the LFO in 0 to 1, which mimics a clock-modulated BBD (delay is inversely proportional to clock rate). Reads use 4-point Hermite interpolation in <code>readtap()</code>.</li>
+<li><b>Buffers:</b> two delay lines of 16384 samples in memory (line A at 0, line B at <code>BUFSIZE</code>), written at <code>wp</code>. Line B is only read in Dual mode.</li>
+<li><b>LFO:</b> <code>lfoshape(p, m)</code> blends triangle and sine. Phase B is offset by 0.25 for Dual. Drift is a smoothed random target, redrawn every 0.3 s, scaling the rate by up to +/-5%.</li>
+<li><b>Preamp:</b> <code>tanh_(x*g_pre + 0.15)</code> minus its DC value, normalised by <code>pnorm</code> so small signals have unity gain. <code>g_pre = g_sens * (level/7)^2</code>.</li>
+<li><b>Smoothing:</b> rate, delay, shape and dry/wet gains use a 30 ms one-pole (<code>smc</code>) toward targets set in <code>@slider</code>, so changing mode does not click.</li>
+<li><b>BBD filter:</b> two cascaded one-poles at the bandwidth setting (clamped to 0.45 x <code>srate</code>). Noise is added before them.</li>
+<li><b>Output:</b> <code>omode</code> 0 mono mix, 1 Direct/Effect, 2 Dual. No oversampling around the preamp, which is the known aliasing limitation.</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ RANGEMASTER ============ -->
+<section id="rangemaster" class="p">
+<span class="tag">Audio effect</span>
+<h2>Dallas Arbiter Rangemaster Treble Booster</h2>
+<p>A stereo treble booster inspired by the single germanium transistor pedal behind many 1960s and 70s lead tones.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">Download Dallas Arbiter Rangemaster Treble Booster.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put it on an audio track, first in the chain, before any amp sim or other drive.</li><li>Set <b>Range</b> for the boost and <b>Output</b> to match your level.</li><li>Shape the tone with <b>Input Cap</b> and <b>Hi-Cut</b>, and the clipping with <b>Bias</b>, <b>Germanium Asymmetry</b> and <b>Battery</b>.</li></ol>
+<p>At defaults the small-signal response runs from about -14 dB at 100 Hz to about +9 dB at 4 kHz. Very quiet signals (-40 dBFS or lower) stay fairly clean even at full Range, while a typical guitar DI (-20 to -10 dBFS) drives the stage much harder. If it is too clean, raise Input Trim, lower Battery or raise Bias. The graph shows the linear response only, so it does not react to Bias, Asymmetry, Battery or Warmth. Feed it a DI'd guitar: the interaction with a real pickup is not modelled.</p>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>Range<th>What it does
+<tr><td>Range<td>0 to 10<td>Stage gain, about -4 dB to +26 dB. Also sets how hard the transistor is driven.
+<tr><td>Input Cap (nF)<td>1 to 100<td>Input coupling cap. Stock is 5 nF. Try 10 to 47 nF for the "fuller" mod.
+<tr><td>Transistor hFE<td>30 to 150<td>Sets input impedance and so the input high-pass corner (higher hFE, lower corner), plus a slight gain change.
+<tr><td>Bias (%)<td>-50 to +50<td>Shifts the operating point. Away from 0 the half-waves clip unevenly. Positive and negative are mirror images.
+<tr><td>Germanium Asymmetry (%)<td>0 to 100<td>How much more headroom one half-wave has. 0 is symmetric.
+<tr><td>Battery (V)<td>4 to 9.6<td>Supply voltage. A weaker battery clips earlier and sounds more compressed.
+<tr><td>Hi-Cut (Hz)<td>2000 to 20000<td>One-pole low-pass after the clipper.
+<tr><td>Input Trim (dB)<td>-24 to +24<td>Level into the stage.
+<tr><td>Output (dB)<td>-36 to +12<td>Level out.
+<tr><td>Warmth (%)<td>0 to 100<td>Extra even-order harmonics.
+<tr><td>Oversampling<td>Off, 2x, 4x, 8x<td>Higher is cleaner and uses more CPU.
+</table></div>
+<p><b>Defaults:</b> Range 7, Input Cap 5 nF, hFE 75, Bias 0, Asymmetry 60, Battery 9 V, Hi-Cut 12000 Hz, Trim 0, Output -6 dB, Warmth 25, Oversampling 4x.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Sliders:</b> 1 Range, 2 Input Cap (log), 3 hFE, 4 Bias, 5 Asymmetry, 6 Battery, 7 Hi-Cut (log), 8 Trim, 9 Output, 10 Warmth, 11 Oversampling index (0 to 3, factor = 2^index).</li>
+<li><b>Memory map:</b> 0 to 14 oversampling filter coefficients (3 biquads x 5), 100+ upsampling states (6 per channel), 120+ downsampling states (6 per channel), 200+ one-pole states (8 per channel).</li>
+<li><b>Input network:</b> a one-pole high-pass with <code>rin = 59.4k || (hFE*500)</code> and the input cap. The corner is clamped to 0.45 x <code>srate</code>. Output coupling is 20 nF into 150k (about 53 Hz) and also removes the DC from asymmetric clipping.</li>
+<li><b>Clipper:</b> <code>sh(x, hpos, hneg)</code> is an asymmetric tanh saturator. Headroom <code>hp = 0.5*battery/9</code> and <code>hn = hp*(1 + 1.2*asym)</code>. <code>vb</code> shifts the operating point and <code>y0</code> is the static offset subtracted afterwards. Warmth adds <code>0.4*warm*v*v</code>.</li>
+<li><b>Oversampling:</b> zero-stuff by <code>osf</code> (input scaled by <code>osf</code>), filter with a 6th-order Butterworth made of three biquads (Q 0.5176, 0.7071, 1.9319) at <code>min(0.45*srate, 20000)</code>, clip, filter again and keep the first output of each group. IIR filters, so no latency is reported.</li>
+<li><b>Smoothing:</b> gain and output are smoothed with a 10 ms one-pole to avoid zipper noise.</li>
+<li>The component values were tuned by ear. Change them in <code>@slider</code> (the <code>rin</code>, <code>fc_out</code> and headroom lines).</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ FZ-1 ============ -->
+<section id="fz1" class="p">
+<span class="tag">Audio effect</span>
+<h2>Maestro FZ-1 Fuzz-Tone</h2>
+<p>A stereo fuzz inspired by the Maestro FZ-1. The two channels are processed independently, so it works on mono or stereo tracks.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">Download Maestro FZ-1 Fuzz Tone.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put it on an audio track, ideally first in the chain so it sees the raw instrument.</li><li>Set <b>Fuzz</b> for the amount and <b>Volume</b> to match your level.</li><li>Shape the sound with <b>Bias</b>, <b>Tone</b> and <b>Sag</b>.</li></ol>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>Range<th>What it does
+<tr><td>Fuzz<td>0 to 100<td>Drive. Raises the first-stage gain from -6 dB to +44 dB and lowers the pre-clip low-pass from 9 kHz to 4 kHz.
+<tr><td>Volume (dB)<td>-40 to +12<td>Level of the processed signal.
+<tr><td>Bias<td>0 to 100<td>DC offset ahead of the clippers, for more asymmetric clipping. High settings get ragged and can starve the signal.
+<tr><td>Tone<td>0 to 100<td>Output low-pass from about 1 kHz to 12 kHz.
+<tr><td>Sag<td>0 to 100<td>Level-dependent bias drop in the second stage. Loud passages compress and thin out, and notes can sputter as they decay.
+<tr><td>Mix (%)<td>0 to 100<td>Dry/wet blend. Volume only affects the wet signal.
+</table></div>
+<p><b>Defaults:</b> Fuzz 60, Volume -12 dB, Bias 35, Tone 50, Sag 25, Mix 100.</p>
+<h3>Signal path</h3>
+<p>90 Hz input high-pass, first clipper, 250 Hz coupling high-pass, a low-pass that darkens with Fuzz, a second clipper with envelope-driven bias sag (about 2 ms attack, 150 ms release), tone low-pass, 20 Hz DC blocker. Both clippers are asymmetric: the positive half clips softly and the negative half has a lower ceiling, which adds even-order harmonics. The fuzz path runs at 2x oversampling.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Sliders:</b> 1 Fuzz, 2 Volume, 3 Bias, 4 Tone, 5 Sag, 6 Mix. All coefficients are computed in <code>@slider</code> at twice the sample rate (<code>fs2 = 2*srate</code>).</li>
+<li><b>Structure:</b> <code>fz()</code> is an instance function (state in <code>z1..z5</code>, <code>env</code>). Each channel is an instance (<code>chL</code>, <code>chR</code>) configured by <code>fz_set()</code>. Parameters are passed as arguments so both channels share the same coefficients.</li>
+<li><b>Nonlinearity:</b> <code>tanhf()</code> is a rational tanh approximation that is exactly +/-1 beyond |x| = 3. <code>ge()</code> uses it for the positive half and <code>0.7*tanhf(x/0.7)</code> for the negative half.</li>
+<li><b>Oversampling:</b> each input sample produces two fuzz outputs. The first uses the average of the previous and current input (linear interpolation), the second uses the input itself. A 4th-order Butterworth low-pass at 0.45 x <code>srate</code> (two biquads, Q 0.5412 and 1.3066, run at <code>fs2</code>) filters both. The first output is discarded after being run through the filter, and the second is the output sample.</li>
+<li><b>Sag:</b> the envelope follower tracks the post-filter signal and subtracts <code>sg*env</code> from the second stage's bias.</li>
+<li><b>Adding a control:</b> add a <code>sliderN</code> line at the end (so existing presets keep their mapping), compute its coefficient in <code>@slider</code>, and pass it through <code>fz_set()</code>.</li>
 </ul>
 </details>
 </section>
