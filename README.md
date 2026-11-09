@@ -10,7 +10,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 | --- | --- | --- | --- |
 | Harmony | `Harmony.jsfx` | MIDI | Scale and chord engine: turns single notes into chords built from a transformable scale |
 | Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
-| ADT Double Tracker | `ADT_Double_Tracker.jsfx` | Audio | Artificial double tracking: a varispeed-delayed second take with separate pan, drive and level per path |
+| ADT Double Tracker | `ADT Double Tracker.jsfx` | Audio | Artificial double tracking: a varispeed-delayed second take with separate pan, drive and level per path |
 | Boss CE-1 Chorus Ensemble | `Boss CE-1 Chorus Ensemble.jsfx` | Audio | BBD-style chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble |
 | Dallas Arbiter Rangemaster Treble Booster | `Dallas Arbiter Rangemaster Treble Booster.jsfx` | Audio | Single-transistor germanium treble booster inspired by the Dallas Arbiter Rangemaster |
 | Maestro FZ-1 Fuzz-Tone | `Maestro FZ-1 Fuzz Tone.jsfx` | Audio | Three-stage germanium-style fuzz inspired by the Maestro FZ-1 |
