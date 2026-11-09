@@ -36,14 +36,14 @@ slider23:cx_mir=0<0,1,1{Off,On}>-Chord TX: Mirror
 slider24:cx_neg=0<0,1,1{Off,On}>-Chord TX: Negative
 slider25:cx_close=0<0,1,1{Off,On}>-Chord TX: Close
 slider26:cx_spread=0<0,1,1{Off,On}>-Chord TX: Spread
-slider27:cx_topcl=0<0,1,1{Off,On}>-Chord TX: Spread Top Cluster
+slider27:cx_width=2<1,8,1>-Chord TX: Spread ctaves
 slider28:cx_resize=0<0,1,1{Off,On}>-Chord TX: Resize
 slider29:cx_rs0=0<-24,24,1>-Chord TX: Resize Start
 slider30:cx_rs1=3<-24,24,1>-Chord TX: Resize End
 slider31:cx_vl=0<0,1,1{Off,On}>-Chord TX: Auto-voicing
 
 slider32:in_mode=0<0,3,1{Root,Degree,Direct,Auto}>-Input: Mode
-slider33:auto_sub=0<0,2,1{Modal Interchange,Modulation,Adapt}>-Input: Auto Sub-mode
+slider33:auto_sub=2<0,2,1{Modal Interchange,Transposition,Adaptive}>-Input: Auto Sub-mode
 slider34:auto_ref=1<0,1,1{Original,Current}>-Input: Auto Distance From
 slider35:auto_rst=0<0,1,1{Off,On}>-Input: Auto Autoreset
 slider36:out_ch=0<0,16,1{Same as input,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}>-Output Channel
@@ -81,8 +81,9 @@ A_STKC = 4864;  // channels
 A_NDEG = 5120;  // note -> degree id (Degree mode)
 A_CHM = 5376;   // chord as MIDI notes
 A_SPR = 6144;   // spread workspace
-SP_CAND = A_SPR; SP_IDX = A_SPR + 256; SP_USED = A_SPR + 512; SP_CNT = A_SPR + 528;
-SP_PTR = A_SPR + 544; SP_RES = A_SPR + 560; SP_PC = A_SPR + 576;
+SP_RES = A_SPR + 560; SP_PC = A_SPR + 576; SP_GAP = A_SPR + 592; SP_TGT = A_SPR + 608; SP_UF = A_SPR + 624;
+DP_B = 40000; DP_P = 70000; DP_G = 100000; DP_POP = 130000;   // spread DP tables (2^11 subsets x 12)
+DP_INF = 1000000000000000;
 A_ADU = 7000;   // Adapt: used-degree flags
 A_ADP = 7100;   // Adapt: pitch classes of held notes (unique, oldest first)
 A_ADV = 7200;   // Adapt: scratch for max_gap
@@ -785,54 +786,119 @@ function op_resize(p, n) local(i, R, cnt, s, e) (
   copy_arr(p, A_TMP, cnt);
   cnt;
 );
-// spread: iterative backtracking search (EEL2 has no recursion)
-function spread_build(d, n, strict, minLow, minHigh) local(mi, prev, lo, hi, i, cnt, c, off, j, base) (
-  mi = n > 2 ? floor(minLow + (minHigh - minLow) * d / (n - 2) + 0.5) : minLow;
-  prev = SP_RES[d]; lo = prev + mi + 1; hi = prev + 11;
-  cnt = 0; i = 0; base = d * 16;
-  loop(n - 1,
-    bitv(SP_USED[d], i) == 0 ? (
-      off = pmod(SP_PC[i] - pmod(lo, 12), 12);
-      c = lo + off;
-      (strict == 0 || c <= hi) ? (
-        j = cnt;
-        while (j > 0 && SP_CAND[base + j - 1] > c) (
-          SP_CAND[base + j] = SP_CAND[base + j - 1]; SP_IDX[base + j] = SP_IDX[base + j - 1]; j -= 1;
-        );
-        SP_CAND[base + j] = c; SP_IDX[base + j] = i; cnt += 1;
-      );
+// spread: the bass stays, every other note is moved to whichever octave gives the gap profile closest to a
+// target that is widest at the bottom and narrows towards the top:
+//   target gap k (0 = bottom) = sc * (3 + 6 * 0.8^k)        (sc = 1 is the "natural" size: 9, 7.8, 6.8 ... down to 3)
+// A gap under a minor third is penalised. Exact search (DP over subsets) up to 11 upper notes, greedy beyond.
+// Spread Octaves N sets the range (12 * N semitones): sc starts at the value whose target profile just fills that
+// range (so a triad stretches over several octaves when asked) and is then shrunk step by step until the voicing
+// fits; N = 1 gives the closed voicing.
+function sp_cost(g, k) local(c) (
+  c = abs(g - SP_TGT[k]);
+  g < 3 ? ( c += 6 * (3 - g); );
+  c;
+);
+function sp_q(base, k) ( max(0, floor((SP_TGT[k] - base) / 12)); );   // octaves to add so that base + 12 * q is just below the target gap
+function spread_dp(m, first, flr) local(full, s, i, j, k, g, d, base, c, idx, nidx, bi, bv) (
+  full = 2^m;
+  k = 0; loop(m, SP_TGT[k] = flr + (first - flr) * 0.8^k; k += 1;);
+  DP_POP[0] = 0; s = 1; loop(full - 1, DP_POP[s] = DP_POP[floor(s / 2)] + (s & 1); s += 1;);
+  s = 0; loop(full * 12, DP_B[s] = DP_INF; s += 1;);
+  // first gap: bass -> note i
+  i = 0;
+  loop(m,
+    d = pmod(SP_PC[i] - pmod(SP_RES[0], 12), 12); base = d > 0 ? d : 12;
+    idx = 2^i * 12 + i;
+    g = sp_q(base, 0);
+    loop(2,
+      c = sp_cost(base + 12 * g, 0);
+      c < DP_B[idx] ? ( DP_B[idx] = c; DP_P[idx] = -1; DP_G[idx] = base + 12 * g; );
+      g += 1;
     );
     i += 1;
   );
-  SP_CNT[d] = cnt;
-);
-function spread_dfs(n, strict, minLow, minHigh) local(d, nodes, found, j) (
-  d = 0; nodes = 0; found = 0;
-  SP_USED[0] = 0;
-  spread_build(0, n, strict, minLow, minHigh); SP_PTR[0] = 0;
-  while (d >= 0 && found == 0 && nodes < 20000) (
-    SP_PTR[d] >= SP_CNT[d] ? ( d -= 1; ) : (
-      j = SP_PTR[d]; SP_PTR[d] += 1; nodes += 1;
-      SP_RES[d + 1] = SP_CAND[d * 16 + j];
-      (d + 1 == n - 1) ? ( found = 1; ) : (
-        SP_USED[d + 1] = SP_USED[d] + 2^SP_IDX[d * 16 + j];
-        d += 1;
-        spread_build(d, n, strict, minLow, minHigh); SP_PTR[d] = 0;
+  // extend: subsets in increasing order (a superset is always a larger number)
+  s = 1;
+  loop(full - 1,
+    k = DP_POP[s];
+    k < m ? (
+      i = 0;
+      loop(m,
+        idx = s * 12 + i;
+        ((s & (2^i)) != 0 && DP_B[idx] < DP_INF) ? (
+          j = 0;
+          loop(m,
+            (s & (2^j)) == 0 ? (
+              d = pmod(SP_PC[j] - SP_PC[i], 12); base = d > 0 ? d : 12;
+              nidx = (s + 2^j) * 12 + j;
+              g = sp_q(base, k);
+              loop(2,
+                c = DP_B[idx] + sp_cost(base + 12 * g, k);
+                c < DP_B[nidx] ? ( DP_B[nidx] = c; DP_P[nidx] = idx; DP_G[nidx] = base + 12 * g; );
+                g += 1;
+              );
+            );
+            j += 1;
+          );
+        );
+        i += 1;
       );
     );
+    s += 1;
   );
-  found;
+  // best final state, then walk back collecting the gaps
+  bi = 0; bv = DP_INF; i = 0;
+  loop(m, DP_B[(full - 1) * 12 + i] < bv ? ( bv = DP_B[(full - 1) * 12 + i]; bi = i; ); i += 1;);
+  idx = (full - 1) * 12 + bi; k = m;
+  loop(m, SP_GAP[k - 1] = DP_G[idx]; idx = DP_P[idx]; k -= 1;);
 );
-function op_spread(p, n) local(i, minLow, minHigh, ok) (
+function spread_greedy(m, first, flr) local(k, i, d, base, g, c, bc, bi, bg, ppc) (
+  k = 0; loop(m, SP_TGT[k] = flr + (first - flr) * 0.8^k; SP_UF[k] = 0; k += 1;);
+  ppc = pmod(SP_RES[0], 12);
+  k = 0;
+  loop(m,
+    bc = DP_INF; bi = 0; bg = 0; i = 0;
+    loop(m,
+      SP_UF[i] == 0 ? (
+        d = pmod(SP_PC[i] - ppc, 12); base = d > 0 ? d : 12;
+        g = sp_q(base, k);
+        loop(2,
+          c = sp_cost(base + 12 * g, k);
+          c < bc ? ( bc = c; bi = i; bg = base + 12 * g; );
+          g += 1;
+        );
+      );
+      i += 1;
+    );
+    SP_UF[bi] = 1; SP_GAP[k] = bg; ppc = SP_PC[bi]; k += 1;
+  );
+);
+// closed voicing: upper notes in ascending pitch-class order above the bass (always within one octave)
+function spread_closed(m) local(i, b) (
+  b = pmod(SP_RES[0], 12);
+  i = 0; loop(m, SP_GAP[i] = pmod(SP_PC[i] - b, 12); SP_GAP[i] == 0 ? ( SP_GAP[i] = 12; ); i += 1;);
+  sort_asc(SP_GAP, m);
+  i = 0; loop(m, SP_RES[i + 1] = SP_RES[0] + SP_GAP[i]; i += 1;);
+);
+function op_spread(p, n) local(i, m, T, sc, tries, span, ok) (
   (n > 1 && n <= 16) ? (
     copy_arr(A_TMP, p, n); sort_asc(A_TMP, n);
-    minLow = 2;                          // round(log2(9/8) * 12)
-    minHigh = cx_topcl ? 0 : 5;          // round(log2(4/3) * 12)
+    m = n - 1;
+    T = 12 * max(1, min(8, floor(cx_width + 0.5)));
     SP_RES[0] = A_TMP[0];
-    i = 1; loop(n - 1, SP_PC[i - 1] = pmod(A_TMP[i], 12); i += 1;);
-    ok = spread_dfs(n, 1, minLow, minHigh);
-    ok == 0 ? ( ok = spread_dfs(n, 0, minLow, minHigh); );
-    ok ? ( copy_arr(p, SP_RES, n); );
+    i = 1; loop(m, SP_PC[i - 1] = pmod(A_TMP[i], 12); i += 1;);
+    T > 12 ? (
+      // shrink the target profile until the voicing fits (if it never does, the tightest attempt is used)
+      span = 0; i = 0; loop(m, span += 3 + 6 * 0.8^i; i += 1;);   // total of the natural target profile
+      sc = T / span; tries = 0; ok = 0;
+      while (ok == 0 && tries < 14) (
+        m <= 11 ? spread_dp(m, 9 * sc, 3 * sc) : spread_greedy(m, 9 * sc, 3 * sc);
+        span = 0; i = 0; loop(m, span += SP_GAP[i]; i += 1;);
+        span <= T ? ( ok = 1; ) : ( sc *= (m > 8 ? 0.7 : 0.88); tries += 1; );   // bigger steps for big chords (speed)
+      );
+      i = 1; loop(m, SP_RES[i] = SP_RES[i - 1] + SP_GAP[i - 1]; i += 1;);
+    ) : spread_closed(m);
+    copy_arr(p, SP_RES, n);
   );
 );
 // voice leading (complexity 0 = closest voicing to the previous chord)
@@ -1848,17 +1914,17 @@ gfx_a = 1;
 gfx_set(0.60, 0.62, 0.67, 1); ft(10, 10, "INPUT", 1);
 opt(58, 6, 56, 22, "Root", S_INMODE, 0);
 opt(116, 6, 56, 22, "Degree", S_INMODE, 1);
-opt(174, 6, 56, 22, "Direct", S_INMODE, 2);
-opt(232, 6, 56, 22, "Auto", S_INMODE, 3);
+opt(174, 6, 56, 22, "Auto", S_INMODE, 3);
+opt(232, 6, 56, 22, "Direct", S_INMODE, 2);
 in_mode == 3 ? (
-  opt(296, 6, 88, 22, "Interchange", S_SUB, 0);
-  opt(386, 6, 76, 22, "Modulation", S_SUB, 1);
-  opt(464, 6, 50, 22, "Adapt", S_SUB, 2);
-  gfx_set(0.60, 0.62, 0.67, 1); ft(522, 10, "dist from", 1);
-  opt(574, 6, 58, 22, "Original", 34, 0);
-  opt(634, 6, 52, 22, "Current", 34, 1);
-  tog(692, 6, 78, 22, "Autoreset", 35);
-  btn(774, 6, 60, 22, "Reset", 0, 1) ? ( act = 1; );
+  opt(296, 6, 110, 22, "Modal Interchange", S_SUB, 0);
+  opt(408, 6, 84, 22, "Transposition", S_SUB, 1);
+  opt(494, 6, 56, 22, "Adaptive", S_SUB, 2);
+  gfx_set(0.60, 0.62, 0.67, 1); ft(558, 10, "dist from", 1);
+  opt(610, 6, 58, 22, "Original", 34, 0);
+  opt(670, 6, 52, 22, "Current", 34, 1);
+  tog(728, 6, 72, 22, "Autoreset", 35);
+  btn(804, 6, 56, 22, "Reset", 0, 1) ? ( act = 1; );
 );
 gfx_set(0.60, 0.62, 0.67, 1); ft(872, 10, "Out ch", 1);
 stepper(912, 6, 90, 0, "", 36, 0, 16, 2, 0);
@@ -1898,8 +1964,8 @@ in_mode == 1 ? strcpy(#ml, "Degree: each held white key plays the chord of its d
 in_mode == 2 ? strcpy(#ml, "Direct: polyphonic pass-through");
 in_mode == 3 ? (
   auto_sub == 0 ? sprintf(#ml, "Auto / Modal Interchange: live mode rotation %d (baseline %d)", tx_mode, auto_base_rot) :
-  auto_sub == 1 ? sprintf(#ml, "Auto / Modulation: transposition %d", auto_mod_t < 0 ? 0 : auto_mod_t) :
-                  strcpy(#ml, adapt_on ? "Auto / Adapt: scale adapted to the played notes" : "Auto / Adapt: scale not adapted yet");
+  auto_sub == 1 ? sprintf(#ml, "Auto / Transposition: transposition %d", auto_mod_t < 0 ? 0 : auto_mod_t) :
+                  strcpy(#ml, adapt_on ? "Auto / Adaptive: scale adapted to the played notes" : "Auto / Adaptive: scale not adapted yet");
 );
 gfx_set(0.45, 0.47, 0.52, 1); ft(10, 94, #ml, 3);
 gfx_set(0.60, 0.62, 0.67, 1); ft(690, 92, "Common notes", 1);
@@ -2063,13 +2129,16 @@ tog(x, 300, 107, 20, "Mirror", 23);
 tog(x + 117, 300, 107, 20, "Negative", 24);
 tog(x, 326, 107, 20, "Close", 25);
 tog(x + 117, 326, 107, 20, "Spread", 26);
-tog(x + 117, 352, 107, 20, "top cluster", 27);
+stepper(x, 352, w, 90, "Spread Octaves", 27, 1, 8, 0, 2);
 tog(x, 378, 70, 20, "Resize", 28);
 stepper(x + 76, 378, 72, 12, "s", 29, -24, 24, 0, 0);
 stepper(x + 152, 378, 72, 12, "e", 30, -24, 24, 0, 3);
-tog(x, 410, 107, 20, "Auto-voice", 31);
-btn(x + 117, 410, 107, 20, "Reset memory", 0, 1) ? ( act = 2; );
+tog(x, 410, 107, 20, "Auto-voicing", 31);
+btn(x + 117, 410, 107, 20, "Reset", 0, 1) ? ( act = 2; );
 
 // text field housekeeping
 tf_seen == 0 ? ( tf_id = 0; );
 last_cap = mouse_cap;
+
+
+

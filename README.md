@@ -33,7 +33,7 @@ The chord is built in four stages, one panel each in the editor:
 3. **Chord:** a rule that picks notes from the live scale (a list of scale degrees or of interval steps), the degree it starts on, a rotation and a number of voices.
 4. **Chord transform:** Position, Offset, Mode, Invert, Mirror, Close, Spread, Resize and Auto-voicing, applied in that order. Chord **Negative** acts earlier, on the scale the chord is picked from.
 
-Chord tones that would fall outside MIDI notes 0 to 127 are dropped. All other MIDI messages pass through untouched. All-notes-off and all-sound-off (CC 123 and 120) stop every chord.
+Chord tones that would fall outside MIDI notes 0 to 127 are dropped, and notes that land on the same pitch are merged. All other MIDI messages pass through untouched. All-notes-off and all-sound-off (CC 123 and 120) stop every chord.
 
 #### Scale sources
 
@@ -59,8 +59,8 @@ The title of the **Scale** panel always starts with the root of the live scale, 
 Next to the SCALE label, an orange `from ...` shows where the scale came from: the same scale without any transform, or in Auto mode the initial scale. It only appears when something changed. For example, Mode 1 on C Ionian shows `C  Dorian` with `from C  Ionian (Major)`.
 
 - **Modal Interchange** keeps the root and changes the name, so you see which mode the algorithm moved you to.
-- **Modulation** keeps the name and changes the root, since every candidate is a transposition of the same shape.
-- **Adapt** reshapes the scale, so the original root may no longer fit. The plugin first reads the adapted scale from the original root. If that shape is not in the library, it tries each note of the adapted scale as the root and takes the match closest to the original root (ties go upward). For example, C major with C# held becomes `C#  Altered Dominant` (`from C  Ionian (Major)`), and with Bb and C# held it becomes `C#  Ultralocrian`.
+- **Transposition** keeps the name and changes the root, since every candidate is a transposition of the same shape.
+- **Adaptive** reshapes the scale, so the original root may no longer fit. The plugin first reads the adapted scale from the original root. If that shape is not in the library, it tries each note of the adapted scale as the root and takes the match closest to the original root (ties go upward). For example, C major with C# held becomes `C#  Altered Dominant` (`from C  Ionian (Major)`), and with Bb and C# held it becomes `C#  Ultralocrian`.
 - **Degree** names the scale from its new first note, so degree 1 of C major reads `D  Dorian`.
 - **Negative** names the scale from the **Root** setting when that note is in the result, so C major reads `C  Aeolian (Natural Minor)` and D major reads `D  Aeolian (Natural Minor)`.
 - If the shape is not in the library, the title shows the root and `(not in library)`.
@@ -70,7 +70,7 @@ Next to the SCALE label, an orange `from ...` shows where the scale came from: t
 
 Every note name in the editor (the keyboard labels, the scale and chord notes in the header, the **Root** value and the pitch-class cells) is spelled to fit the live scale, so a flat key shows Eb and not D#. The **Names** setting in the header decides how:
 
-- **Auto:** a seven-note scale gets one letter per degree whenever that is possible, with the fewest accidentals, so Eb major reads Eb F G Ab Bb C D. Sharps win a tie. A scale that cannot be spelled this way (for example, one that would need double accidentals) and every scale with another number of notes keep their white keys plain and use the sharps or flats that match the scale. Minor-type scales are judged by their relative major, so C minor uses flats.
+- **Auto:** a seven-note scale gets one letter per degree whenever that is possible, with the fewest accidentals, so Eb major reads Eb F G Ab Bb C D. Sharps win a tie, except that a white-key root keeps its plain name (F Locrian, not E# Locrian). A scale that cannot be spelled this way (for example, one that would need double accidentals) and every scale with another number of notes keep their white keys plain and use the sharps or flats that match the scale. Minor-type scales are judged by their relative major, so C minor uses flats.
 - **Sharps** and **Flats:** prefer that kind of accidental everywhere.
 
 Notes outside the scale, such as chord tones, use the same sharp or flat direction as the scale. All twelve pitch-class cells follow it too, including the unlit ones, and so does the root in the detected scale name. The octave belongs to the letter, so B#3 is MIDI note 60 and Cb4 is MIDI note 59.
@@ -95,11 +95,13 @@ Notes outside the scale, such as chord tones, use the same sharp or flat directi
 | Mirror | Reverses the order of the chord's intervals |
 | Negative | Picks the chord from the negative-harmony version of the scale |
 | Close | Folds the chord into one octave, the one that already holds most of its notes |
-| Spread | Opens the voicing: neighbouring notes end up at least a whole tone apart at the bottom, growing to a fourth at the top. **Top cluster** lets the highest notes sit close together |
+| Spread | Opens the voicing: the lowest note stays and the others move to the octaves that give wide gaps at the bottom and narrower ones towards the top. **Spread Octaves** sets the total range |
 | Resize | Replaces the chord with notes **s** to **e** of its octave-repeating series, so the chord can get bigger, smaller or run downward (if s is greater than e) |
 | Auto-voicing | Picks the inversion and octave closest to the previous chord, for smooth voice leading |
 
-Auto-voicing remembers the previous chord. **Reset memory** forgets it, so the next chord is voiced from scratch.
+**Spread** keeps the lowest note and gives every other note (keeping its pitch class) the octave that brings the gaps between neighbouring notes closest to a target profile: about 9 semitones for the first gap, then 7.8, 6.8 and so on, narrowing towards 3 at the top. Gaps smaller than a minor third are penalised. **Spread Octaves** (1 to 8, default 2) sets the range of the voicing, 12 semitones per octave. The plugin starts from a profile that just fills that range and tightens it step by step until the chord fits, so a triad stretches over several octaves when you ask for it. At 1 the result is the closed voicing, with the notes in ascending pitch-class order above the bass. Spread works on chords of up to 16 notes (an exact search up to 11 upper notes, a greedy one beyond).
+
+Auto-voicing remembers the previous chord. The **Reset** button next to it forgets it, so the next chord is voiced from scratch.
 
 ### Input modes
 
@@ -112,24 +114,24 @@ In every mode except Direct, each held key owns its own chord. The scale root, d
 
 ### Auto mode
 
-In Auto mode the plugin looks at all the keys you are holding. If they all belong to the live scale, the scale stays as it is. If not, it changes the scale so that it contains them. The chord is then built on the scale degree of the key you pressed last, in that key's octave.
+In Auto mode the plugin looks at all the keys you are holding. If they all belong to the live scale, the scale stays as it is. If not, it changes the scale so that it contains them. The chord is then built on the scale degree of the key you pressed last, counted from middle C (with Chord Octave 4 it sits at the pitch of that key).
 
 The **Sub-mode** decides what can change:
 
 - **Modal Interchange:** the scale is rotated through its own modes. The candidates are the modes of the scale you started with, all on the same root (C major, C Dorian and so on). The editor shows the name of the new scale.
-- **Modulation:** the scale keeps its mode and is transposed. All twelve transpositions are candidates. The editor shows the new root.
-- **Adapt:** the scale keeps its number of notes but is reshaped around what you play. Each held pitch class (oldest first) takes over the closest scale note that has not been used yet and lands inside the octave of the original scale, so the scale never widens and the chords stay in range. When two scale notes are equally close, the one that leaves the smallest largest gap between neighbouring notes wins, then the one nearer the edge of the scale. The adapted scale stays in place when you release the keys and keeps adapting as you play more notes. The editor names it, for example `C#  Altered Dominant`.
+- **Transposition:** the scale keeps its mode and is transposed. All twelve transpositions are candidates. The editor shows the new root.
+- **Adaptive** (the default): the scale keeps its number of notes but is reshaped around what you play. Each held pitch class (oldest first) takes over the closest scale note that has not been used yet and lands inside the octave of the original scale, so the scale never widens and the chords stay in range. When two scale notes are equally close, the one that leaves the smallest largest gap between neighbouring notes wins, then the one nearer the edge of the scale. The adapted scale stays in place when you release the keys and keeps adapting as you play more notes. The editor names it, for example `C#  Altered Dominant`.
 
-For Modal Interchange and Modulation, "closest" is measured as the total semitone distance between the two scales' notes. If no candidate contains every held note, the scale is left alone. Adapt always finds a scale.
+For Modal Interchange and Transposition, "closest" is measured as the total semitone distance between the two scales' notes. If no candidate contains every held note, the scale is left alone. Adaptive always finds a scale.
 
 **Distance From** decides what "closest" is measured against:
 
-- **Original:** the initial scale (see below). In Adapt, each new set of notes reshapes the initial scale from scratch, ignoring earlier adaptations.
-- **Current:** the scale that is sounding right now. This is the default, and it makes the scale drift by small steps as you play. In Adapt, each new note reshapes the scale that is already adapted, so the changes accumulate.
+- **Original:** the initial scale (see below). In Adaptive, each new set of notes reshapes the initial scale from scratch, ignoring earlier adaptations.
+- **Current:** the scale that is sounding right now. This is the default, and it makes the scale drift by small steps as you play. In Adaptive, each new note reshapes the scale that is already adapted, so the changes accumulate.
 
-Adapt remembers its own Distance From setting, separately from Modal Interchange and Modulation. Both default to Current.
+Adaptive remembers its own Distance From setting, separately from Modal Interchange and Transposition. Both default to Current.
 
-The **initial scale** is the mode, transposition and chord degree you had when you switched to Auto. Changing the **Mode** slider by hand while in Auto sets a new initial scale, and so does changing the **Root** in Modulation. In Adapt, changing any Scale or Scale Transform control restarts the adaptation from the new scale.
+The **initial scale** is the mode, transposition and chord degree you had when you switched to Auto. Changing the **Mode** slider by hand while in Auto sets a new initial scale, and so does changing the **Root** in Transposition. In Adaptive, changing any Scale or Scale Transform control restarts the adaptation from the new scale.
 
 Three things return you to the initial scale:
 
@@ -137,7 +139,7 @@ Three things return you to the initial scale:
 - **Autoreset**, when on: it resets whenever you press a key while no other key is held, before the scale is chosen.
 - Leaving Auto mode, or switching the Sub-mode.
 
-In Adapt, returning to the initial scale also drops the adapted scale.
+In Adaptive, returning to the initial scale also drops the adapted scale.
 
 ### Usage
 
@@ -157,13 +159,13 @@ All of these are sliders, so they can be automated. **Input**:
 | Control | Range | What it does |
 | --- | --- | --- |
 | Input: Mode | Root, Degree, Direct, Auto | How a played key drives the chord |
-| Input: Auto Sub-mode | Modal Interchange, Modulation, Adapt | What Auto mode is allowed to change |
-| Input: Auto Distance From | Original, Current | What Auto mode measures against. In Adapt it is the scale that gets reshaped. Adapt keeps its own setting |
+| Input: Auto Sub-mode | Modal Interchange, Transposition, Adaptive | What Auto mode is allowed to change |
+| Input: Auto Distance From | Original, Current | What Auto mode measures against. In Adaptive it is the scale that gets reshaped. Adaptive keeps its own setting |
 | Input: Auto Autoreset | Off, On | Return to the initial scale on every fresh key press |
 | Input: Common Notes | Hold, Retrigger | What happens to a note that two chords share |
 | Note names: Accidentals | Auto, Sharps, Flats | How notes are spelled: fitted to the scale, always sharps or always flats |
 | Output Channel | Same as input, 1 to 16 | MIDI channel of the output notes |
-| Action | -, Reset Auto, Reset Voice-Leading | Momentary actions (these are the **Reset** and **Reset memory** buttons) |
+| Action | -, Reset Auto, Reset Voice-Leading | Momentary actions (the **Reset** button in the Input bar and the **Reset** button next to Auto-voicing) |
 
 **Scale**:
 
@@ -210,7 +212,7 @@ All of these are sliders, so they can be automated. **Input**:
 | Chord TX: Negative | Off, On | Picks the chord from the negative-harmony scale |
 | Chord TX: Close | Off, On | Folds the chord into one octave |
 | Chord TX: Spread | Off, On | Opens the voicing |
-| Chord TX: Spread Top Cluster | Off, On | Lets the top notes of a spread chord sit close together |
+| Chord TX: Spread Octaves | 1 to 8 | Total range of a spread chord, in octaves. 1 gives the closed voicing |
 | Chord TX: Resize | Off, On | Replaces the chord with notes Start to End of its series |
 | Chord TX: Resize Start | -24 to +24 | First note of the resized chord |
 | Chord TX: Resize End | -24 to +24 | Last note of the resized chord |
@@ -225,8 +227,8 @@ The 39 sliders appear in this order: Scale source (5), Scale transform (7), Chor
 | Setting | Default |
 | --- | --- |
 | Input: Mode | Root |
-| Input: Auto Sub-mode | Modal Interchange |
-| Input: Auto Distance From | Current (for every sub-mode, Adapt included) |
+| Input: Auto Sub-mode | Adaptive |
+| Input: Auto Distance From | Current (for every sub-mode, Adaptive included) |
 | Input: Auto Autoreset | Off |
 | Input: Common Notes | Hold |
 | Note names: Accidentals | Auto |
@@ -246,7 +248,8 @@ The 39 sliders appear in this order: Scale source (5), Scale transform (7), Chor
 | Chord: Degree, Rotation | 0 |
 | Chord: Voices | 0 (the length of the list) |
 | Chord TX: Position, Offset, Mode, Invert Axis | 0 |
-| Chord TX: Invert, Mirror, Negative, Close, Spread, Top Cluster, Resize, Auto-voicing | Off |
+| Chord TX: Invert, Mirror, Negative, Close, Spread, Resize, Auto-voicing | Off |
+| Chord TX: Spread Octaves | 2 |
 | Chord TX: Resize Start, End | 0, 3 |
 
 With these defaults every key plays a major triad built on itself, in the octave of the key.
