@@ -60,9 +60,9 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 <div class="top"><button class="ctrl" id="theme" aria-label="Toggle light and dark theme">☀</button></div>
 <main>
 <h1>reaper<span class="dim"> jsfx</span></h1>
-<p class="lead">Experiments with JSFX, REAPER's scripting format for audio and MIDI effects. Two MIDI harmony tools and three pedal-inspired audio effects, each in a single file you can copy into REAPER.</p>
+<p class="lead">Experiments with JSFX, REAPER's scripting format for audio and MIDI effects. Two MIDI harmony tools, an artificial double tracker and three pedal-inspired audio effects, each in a single file you can copy into REAPER.</p>
 <p>This is a personal playground, so expect rough edges. Ideas and bug reports are welcome: open an issue if something sounds wrong.</p>
-<nav aria-label="Sections"><a class="nav-pill" href="#install">Install</a><a class="nav-pill" href="#download">Download</a><a class="nav-pill" href="#harmony">Harmony</a><a class="nav-pill" href="#block-chords">Block Chords</a><a class="nav-pill" href="#ce1">Boss CE-1</a><a class="nav-pill" href="#rangemaster">Rangemaster</a><a class="nav-pill" href="#fz1">Maestro FZ-1</a><a class="nav-pill" href="#dev">Dev notes</a></nav>
+<nav aria-label="Sections"><a class="nav-pill" href="#install">Install</a><a class="nav-pill" href="#download">Download</a><a class="nav-pill" href="#harmony">Harmony</a><a class="nav-pill" href="#block-chords">Block Chords</a><a class="nav-pill" href="#adt">ADT</a><a class="nav-pill" href="#ce1">Boss CE-1</a><a class="nav-pill" href="#rangemaster">Rangemaster</a><a class="nav-pill" href="#fz1">Maestro FZ-1</a><a class="nav-pill" href="#dev">Dev notes</a></nav>
 
 <section id="install" class="p">
 <h2>Install</h2>
@@ -86,6 +86,7 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 <tr><th>Effect<th>Type<th>File
 <tr><td>Harmony<td>MIDI<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Harmony.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Harmony.jsfx">View source</a>
 <tr><td>Block Chords<td>MIDI<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Block%20Chords.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Block%20Chords.jsfx">View source</a>
+<tr><td>ADT Double Tracker<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/ADT_Double_Tracker.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/ADT_Double_Tracker.jsfx">View source</a>
 <tr><td>Boss CE-1 Chorus Ensemble<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Boss%20CE-1%20Chorus%20Ensemble.jsfx">View source</a>
 <tr><td>Dallas Arbiter Rangemaster Treble Booster<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Dallas%20Arbiter%20Rangemaster%20Treble%20Booster.jsfx">View source</a>
 <tr><td>Maestro FZ-1 Fuzz-Tone<td>Audio<td><a class="btn s" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">Download</a><a class="btn s o" href="https://github.com/sivabenepoivediamo/reaper-jsfx/blob/main/Maestro%20FZ-1%20Fuzz%20Tone.jsfx">View source</a>
@@ -207,6 +208,69 @@ footer{border-top:1px solid var(--line);margin-top:72px;padding-top:22px;font:40
 <li><b>Core functions:</b> <code>harm_shape()</code> builds the inversion with the melody on top. <code>step_scale()</code> moves a note by scale steps and returns -9999 if the note is not in the scale. <code>harmonize()</code> assembles <code>OUT[]</code> including alteration, bass doubling and drops.</li>
 <li><b>Note bookkeeping:</b> <code>CNT[ch*128+note]</code> counts the chord notes per held input note. <code>STORE</code> keeps up to 8 output pitches per input note. <code>REFC</code> reference-counts output pitches: a note-on resends a note-off first if the count is above 0, and a note-off is sent only when the count returns to 0. CC 120 and 123 clear the counters for that channel.</li>
 <li>Named strings are not accessible inside functions, so string handles (<code>NMS</code>, <code>CHS</code>) are assigned in <code>@init</code> and used as globals.</li>
+</ul>
+</details>
+</section>
+
+<!-- ============ ADT ============ -->
+<section id="adt" class="p">
+<span class="tag">Audio effect</span>
+<h2>ADT Double Tracker</h2>
+<p>A stereo artificial double tracker. It adds a second, slightly late copy of the signal, the way a real second take sits a little behind the first, with separate pan, drive and level for each path. Moving the delay bends the pitch of the delayed copy, like a nudged tape varispeed.</p>
+<a class="btn" href="https://github.com/sivabenepoivediamo/reaper-jsfx/raw/main/ADT_Double_Tracker.jsfx">Download ADT_Double_Tracker.jsfx</a>
+
+<details open><summary>User manual</summary>
+<h3>Quick start</h3>
+<ol><li>Put it on an audio track with a single part, such as a vocal or a guitar.</li><li>Choose the <b>Input Source</b>: L+R for a stereo track, or Left or Right to double one channel.</li><li>Set <b>Varispeed Delay</b> for how late the second take is. Small values thicken the sound, and larger ones separate the two takes.</li><li>Place the paths with <b>SRC Pan</b> and <b>ADT Pan</b>, and add a slow drift with the <b>LFO</b>.</li></ol>
+<h3>The two paths</h3>
+<ul>
+<li><b>SRC:</b> the original signal.</li>
+<li><b>ADT:</b> the delayed second take.</li>
+</ul>
+<p><b>Varispeed Delay</b> sets how far apart they are. Positive delays ADT relative to SRC, negative delays SRC relative to ADT, so the sign decides which path is late. The window shows a ruler from -40 to +40 ms with an ADT marker at the current delay. It dims when the ADT path is muted or off.</p>
+<p>Each path has its own Pan, Drive, Level, Mute and Phase. <b>Drive</b> is a tanh saturator before the delay, with up to 24 dB of pre-gain and partial level compensation. At 0 it is bypassed. With Input Source on Left or Right the pan is constant-power (-3 dB at the centre). With L+R the stereo image is kept and the pan works as a balance control.</p>
+<h3>Delay and LFO</h3>
+<p>The delay moves toward its target with a time constant of about 20 ms, so changing it, or letting the LFO move it, bends the pitch of the delayed path and never clicks. The LFO modulates the delay by +/- <b>LFO Range</b> around the Varispeed Delay, and the total is limited to +/-40 ms.</p>
+<ul>
+<li><b>Shape:</b> Sine, Triangle, or Random, which picks a new value each cycle and glides to it.</li>
+<li><b>Sync off:</b> the rate is set in Hz.</li>
+<li><b>Sync on:</b> the rate is set in bars. While the transport plays the phase is locked to the song position, using the project's time signature.</li>
+</ul>
+<p>For a sine LFO the peak pitch swing is about 11 cents x Rate (Hz) x Range (ms), so the defaults give roughly +/-3 cents. This is approximate, worked out from the speed of the delay. The smoothing also rounds off the LFO, so rates above about 8 Hz lose depth (roughly 40% less at 10 Hz).</p>
+<p><b>Monitor: Mono</b> sums the output to mono on both channels, to check how the double sounds in mono. The plugin reports 2 samples of latency to REAPER for plugin delay compensation.</p>
+<h3>Controls</h3>
+<div class="tw"><table>
+<tr><th>Control<th>Range<th>What it does
+<tr><td>Input Source<td>Left, L+R, Right<td>Which input channel feeds the effect. Left and Right feed that channel to both sides.
+<tr><td>Monitor<td>Stereo, Mono<td>Mono sums the output to mono, to check the double in mono.
+<tr><td>SRC / ADT Pan<td>-100 to +100<td>Position of each path.
+<tr><td>SRC / ADT Drive<td>0 to 100<td>Saturation before the delay. 0 is off.
+<tr><td>SRC / ADT Level (dB)<td>-60 to +12<td>Level of each path. -60 turns it off.
+<tr><td>SRC / ADT Mute<td>Off, On<td>Silences the path.
+<tr><td>SRC / ADT Phase<td>Normal, Inverted<td>Flips the polarity of the path.
+<tr><td>Varispeed Delay (ms)<td>-40 to +40<td>Delay between the paths. Positive delays ADT, negative delays SRC.
+<tr><td>Varispeed Range (+/- ms)<td>1 to 40<td>Caps the Varispeed Delay at plus or minus this value.
+<tr><td>LFO<td>Off, On<td>Switches the delay modulation.
+<tr><td>LFO Range (+/- ms)<td>0 to 20<td>Depth of the modulation around the Varispeed Delay.
+<tr><td>LFO Rate (Bars)<td>0.25 to 16<td>Cycle length in bars. Shown when Sync is on.
+<tr><td>LFO Rate (Hz)<td>0.05 to 10<td>LFO speed. Shown when Sync is off.
+<tr><td>LFO Sync<td>Off, On<td>Locks the LFO to the project tempo and song position.
+<tr><td>LFO Shape<td>Sine, Triangle, Random<td>Waveform of the modulation.
+<tr><td>Output Gain (dB)<td>-24 to +12<td>Level out.
+</table></div>
+<p><b>Defaults:</b> Input L+R, Monitor Stereo, SRC Pan -30, ADT Pan +30, Drive 0, Level 0 dB, Mute off, Phase Normal, Varispeed Delay 15 ms, Range 20 ms, LFO on, LFO Range 0.5 ms, 2 bars or 0.5 Hz, Sync off, Sine, Output 0 dB.</p>
+</details>
+
+<details><summary>Developer notes</summary>
+<ul>
+<li><b>Sliders (21):</b> 1 and 2 input and monitor, 3 to 7 SRC, 8 to 12 ADT, 13 and 14 varispeed, 15 to 20 LFO, 21 output. Add new controls at the end so saved presets keep their mapping.</li>
+<li><b>Buffers:</b> four 65536-sample circular buffers (SRC left and right, ADT left and right) at 0, 65536, 131072 and 196608, with one write pointer <code>wp</code> masked by <code>&amp; 65535</code>. Drive is applied when writing, so each path has its own saturator ahead of its delay.</li>
+<li><b>Reads:</b> <code>hrd(b, wpos, d)</code> is a 4-point Hermite read and needs <code>d</code> of at least 2 samples. <code>dly_src = 2 + max(0, -ms)</code> and <code>dly_adt = 2 + max(0, ms)</code>, so the sign of the varispeed picks the late path. The fixed 2 samples are reported with <code>pdc_delay = 2</code>, <code>pdc_bot_ch = 0</code> and <code>pdc_top_ch = 2</code>.</li>
+<li><b>Smoothing:</b> <code>ds</code> follows the target delay with a one-pole (<code>dcoef</code>, 20 ms) and the gains follow with <code>gcoef</code> (10 ms). The smoothed delay is what bends the pitch and what the GUI draws. On the first sample all smoothed values start at their targets.</li>
+<li><b>Drive:</b> <code>drive(x, pre, mk)</code> is <code>tanh(x*pre)*mk</code> with <code>pre = 10^(drive*0.01*24/20)</code> and <code>mk = 1/sqrt(pre)</code>. The argument is clamped to +/-15 before the exponential.</li>
+<li><b>Pan:</b> <code>pan_l()</code> and <code>pan_r()</code> use a constant-power law for a mono source (<code>mono = ins != 1</code>) and a balance law for L+R.</li>
+<li><b>LFO:</b> <code>lfo_ph</code> runs 0 to 1. Free: <code>inc = Hz/srate</code>. Sync: <code>inc = tempo/60/srate/(bars*bpb)</code> with <code>bpb = ts_num*4/ts_denom</code>, and while <code>play_state &amp; 1</code> the block start resets the phase to the fractional part of <code>beat_position/(bars*bpb)</code>. Random keeps two values <code>r0</code> and <code>r1</code>, redrawn on each wrap, and blends them with a cosine curve. <code>slider_show</code> hides the Bars or Hz slider that does not apply.</li>
+<li><b>GUI:</b> <code>@gfx 600 95</code> draws a -40 to +40 ms ruler (a tick per ms, a major tick every 5) and the ADT marker at <code>ds</code>. It is display only.</li>
 </ul>
 </details>
 </section>

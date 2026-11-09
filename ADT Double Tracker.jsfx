@@ -1,0 +1,252 @@
+desc:ADT Double Tracker
+tags: delay doubler ADT varispeed tape
+version: 1.0
+
+// ---------------------------------------------------------------
+// Artificial Double Tracking.
+//   SRC path  = the original signal
+//   ADT path  = the delayed "second take"
+// Varispeed > 0 : ADT is delayed relative to SRC
+// Varispeed < 0 : SRC is delayed relative to ADT
+// Delay changes are smoothed, so moving the delay (or the LFO)
+// bends the pitch of the delayed path like a tape varispeed.
+// ---------------------------------------------------------------
+
+slider1:1<0,2,1{Left,L+R,Right}>Input Source
+slider2:0<0,1,1{Stereo,Mono}>Monitor
+
+slider3:-30<-100,100,1>SRC Pan
+slider4:0<0,100,0.1>SRC Drive
+slider5:0<-60,12,0.1>SRC Level (dB, -60 = off)
+slider6:0<0,1,1{Off,On}>SRC Mute
+slider7:0<0,1,1{Normal,Inverted}>SRC Phase
+
+slider8:30<-100,100,1>ADT Pan
+slider9:0<0,100,0.1>ADT Drive
+slider10:0<-60,12,0.1>ADT Level (dB, -60 = off)
+slider11:0<0,1,1{Off,On}>ADT Mute
+slider12:0<0,1,1{Normal,Inverted}>ADT Phase
+
+slider13:15<-40,40,0.01>Varispeed Delay (ms)
+slider14:20<1,40,1>Varispeed Range (+/- ms)
+
+slider15:1<0,1,1{Off,On}>LFO
+slider16:0.5<0,20,0.01>LFO Range (+/- ms)
+slider17:2<0.25,16,0.25>LFO Rate (Bars)
+slider18:0.5<0.05,10,0.01>LFO Rate (Hz)
+slider19:0<0,1,1{Off,On}>LFO Sync
+slider20:0<0,2,1{Sine,Triangle,Random}>LFO Shape
+
+slider21:0<-24,12,0.1>Output Gain (dB)
+
+in_pin:Left
+in_pin:Right
+out_pin:Left
+out_pin:Right
+
+@init
+memset(0, 0, 4*65536);
+bL_s = 0;        // SRC delay buffer, left
+bR_s = 65536;    // SRC delay buffer, right
+bL_a = 131072;   // ADT delay buffer, left
+bR_a = 196608;   // ADT delay buffer, right
+wp = 0;
+
+pdc_delay = 2;   // both paths carry a fixed 2-sample offset (interpolator needs it)
+pdc_bot_ch = 0;
+pdc_top_ch = 2;
+
+dcoef = 1 - exp(-1/(srate*0.02));   // delay smoothing (~20 ms)
+gcoef = 1 - exp(-1/(srate*0.01));   // gain smoothing (~10 ms)
+
+first = 1;
+ds = 0;
+lfo_ph = 0; lfo_last = 0; r0 = 0; r1 = 0; inc = 0;
+
+// 4-point Hermite interpolated read. d must be >= 2 samples.
+function hrd(b, wpos, d)
+  local(rp, i, f, xm1, x0, x1, x2, c1, c2, c3)
+(
+  rp  = wpos - d + 65536;
+  i   = floor(rp);
+  f   = rp - i;
+  xm1 = b[(i-1) & 65535];
+  x0  = b[i & 65535];
+  x1  = b[(i+1) & 65535];
+  x2  = b[(i+2) & 65535];
+  c1  = 0.5*(x1 - xm1);
+  c2  = xm1 - 2.5*x0 + 2*x1 - 0.5*x2;
+  c3  = 0.5*(x2 - xm1) + 1.5*(x0 - x1);
+  ((c3*f + c2)*f + c1)*f + x0;
+);
+
+// tanh saturation with gain compensation
+function drive(x, pre, mk)
+  local(y, e)
+(
+  y = x*pre;
+  y > 15 ? y = 15;
+  y < -15 ? y = -15;
+  e = exp(2*y);
+  (e - 1)/(e + 1) * mk;
+);
+
+function pan_l(p, mono)
+(
+  mono ? cos((p + 1)*$pi*0.25) : (p > 0 ? cos(p*$pi*0.5) : 1);
+);
+
+function pan_r(p, mono)
+(
+  mono ? sin((p + 1)*$pi*0.25) : (p < 0 ? cos(-p*$pi*0.5) : 1);
+);
+
+@slider
+slider_show(1<<16, slider19 ? 1 : 0);   // Rate (Bars) only when Sync is On
+slider_show(1<<17, slider19 ? 0 : 1);   // Rate (Hz) only when Sync is Off
+ins  = slider1;
+mono = (ins != 1);
+
+rng = slider14;
+vc  = min(rng, max(-rng, slider13));
+
+// SRC
+pLs = pan_l(slider3*0.01, mono);
+pRs = pan_r(slider3*0.01, mono);
+dr_s = slider4 > 0;
+pre_s = 10^(slider4*0.01*24/20);
+mk_s = 1/sqrt(pre_s);
+gS_t = (slider6 || slider5 <= -59.9) ? 0 : (10^(slider5/20)) * (slider7 ? -1 : 1);
+
+// ADT
+pLa = pan_l(slider8*0.01, mono);
+pRa = pan_r(slider8*0.01, mono);
+dr_a = slider9 > 0;
+pre_a = 10^(slider9*0.01*24/20);
+mk_a = 1/sqrt(pre_a);
+gA_t = (slider11 || slider10 <= -59.9) ? 0 : (10^(slider10/20)) * (slider12 ? -1 : 1);
+
+go_t = 10^(slider21/20);
+
+@block
+bpb = ts_denom > 0 ? ts_num*4/ts_denom : 4;   // quarter notes per bar
+slider19 ? (
+  inc = tempo/60/srate/(slider17*bpb);
+  (play_state & 1) ? (
+    bx = beat_position/(slider17*bpb);
+    lfo_ph = bx - floor(bx);
+  );
+) : (
+  inc = slider18/srate;
+);
+
+@sample
+// ----- input source selection -----
+ins == 0 ? (
+  xl = spl0; xr = spl0;
+) : (
+  ins == 2 ? (
+    xl = spl1; xr = spl1;
+  ) : (
+    xl = spl0; xr = spl1;
+  )
+);
+
+// ----- LFO -----
+lfo_ph < lfo_last ? ( r0 = r1; r1 = rand(2) - 1; );
+lfo_last = lfo_ph;
+slider20 == 0 ? (
+  lv = sin(2*$pi*lfo_ph);
+) : (
+  slider20 == 1 ? (
+    lv = lfo_ph < 0.5 ? 4*lfo_ph - 1 : 3 - 4*lfo_ph;
+  ) : (
+    lv = r0 + (r1 - r0)*(0.5 - 0.5*cos($pi*lfo_ph));
+  )
+);
+lfo_ph += inc;
+lfo_ph >= 1 ? lfo_ph -= 1;
+
+// ----- total delay (ms), smoothed -----
+dt = vc + (slider15 ? lv*slider16 : 0);
+dt = min(40, max(-40, dt));
+first ? (
+  ds = dt; gS_s = gS_t; gA_s = gA_t; go_s = go_t; first = 0;
+);
+ds  += (dt - ds)*dcoef;
+gS_s += (gS_t - gS_s)*gcoef;
+gA_s += (gA_t - gA_s)*gcoef;
+go_s += (go_t - go_s)*gcoef;
+
+ms = ds*0.001*srate;          // signed delay in samples
+dly_src = 2 + max(0, -ms);    // SRC delayed when varispeed is negative
+dly_adt = 2 + max(0, ms);     // ADT delayed when varispeed is positive
+
+// ----- write (drive per path) -----
+bL_s[wp] = dr_s ? drive(xl, pre_s, mk_s) : xl;
+bR_s[wp] = dr_s ? drive(xr, pre_s, mk_s) : xr;
+bL_a[wp] = dr_a ? drive(xl, pre_a, mk_a) : xl;
+bR_a[wp] = dr_a ? drive(xr, pre_a, mk_a) : xr;
+
+// ----- read -----
+sl = hrd(bL_s, wp, dly_src);
+sr = hrd(bR_s, wp, dly_src);
+al = hrd(bL_a, wp, dly_adt);
+ar = hrd(bR_a, wp, dly_adt);
+
+wp = (wp + 1) & 65535;
+
+// ----- pan / level / sum -----
+outL = sl*pLs*gS_s + al*pLa*gA_s;
+outR = sr*pRs*gS_s + ar*pRa*gA_s;
+
+slider2 ? (
+  m = (outL + outR)*0.5;
+  outL = m; outR = m;
+);
+
+spl0 = outL*go_s;
+spl1 = outR*go_s;
+
+@gfx 600 95
+gfx_set(0.13, 0.14, 0.14, 1);
+gfx_rect(0, 0, gfx_w, gfx_h);
+
+x0  = 24;
+wid = gfx_w - 48;
+ry  = 60;
+
+gfx_setfont(1, "Arial", 13);
+
+// ruler: -40 .. +40 ms (position of ADT relative to SRC)
+i = -40;
+loop(81,
+  gx = x0 + (i + 40)/80*wid;
+  major = (i % 5 == 0);
+  gfx_set(0.75, 0.75, 0.7, 1);
+  (i < 0 && major) ? gfx_set(0.85, 0.25, 0.25, 1);
+  (i > 0 && major) ? gfx_set(0.85, 0.25, 0.25, 1);
+  gfx_line(gx, ry, gx, ry + (major ? 10 : 5));
+  (i % 10 == 0) ? (
+    gfx_set(0.8, 0.8, 0.75, 1);
+    gfx_x = gx - 8; gfx_y = ry + 14;
+    gfx_drawnumber(i, 0);
+  );
+  i += 1;
+);
+
+// ---- ADT marker (above the ruler, yellow outline) ----
+ax = x0 + (ds + 40)/80*wid;
+adt_on = (gA_t != 0);
+gfx_set(0.55, 0.55, 0.55, adt_on ? 1 : 0.4);
+gfx_rect(ax - 32, 12, 64, 30);
+gfx_set(1, 0.9, 0.2, adt_on ? 1 : 0.4);
+gfx_line(ax - 32, 12, ax + 32, 12);
+gfx_line(ax - 32, 42, ax + 32, 42);
+gfx_line(ax - 32, 12, ax - 32, 42);
+gfx_line(ax + 32, 12, ax + 32, 42);
+gfx_line(ax, 42, ax, ry);
+gfx_set(0.15, 0.1, 0.1, 1);
+gfx_x = ax - 26; gfx_y = 15; gfx_drawstr("ADT");
+gfx_x = ax - 26; gfx_y = 27; gfx_drawnumber(ds, 2);
+

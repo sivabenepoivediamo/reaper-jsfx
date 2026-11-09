@@ -10,6 +10,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 | --- | --- | --- | --- |
 | Harmony | `Harmony.jsfx` | MIDI | Scale and chord engine: turns single notes into chords built from a transformable scale |
 | Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
+| ADT Double Tracker | `ADT_Double_Tracker.jsfx` | Audio | Artificial double tracking: a varispeed-delayed second take with separate pan, drive and level per path |
 | Boss CE-1 Chorus Ensemble | `Boss CE-1 Chorus Ensemble.jsfx` | Audio | BBD-style chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble |
 | Dallas Arbiter Rangemaster Treble Booster | `Dallas Arbiter Rangemaster Treble Booster.jsfx` | Audio | Single-transistor germanium treble booster inspired by the Dallas Arbiter Rangemaster |
 | Maestro FZ-1 Fuzz-Tone | `Maestro FZ-1 Fuzz Tone.jsfx` | Audio | Three-stage germanium-style fuzz inspired by the Maestro FZ-1 |
@@ -298,6 +299,92 @@ The effect ships with a large built-in library:
 - **Scales:** major and minor modes, European, Asian, Indian (melas and ragas), pentatonic, modal, jazz, symmetric and miscellaneous.
 - **Base shapes:** triads, sixth, seventh, ninth, eleventh and thirteenth chords, altered dominants, suspended and added-tone chords, symmetric and cluster chords, polychords and hybrids, and classical chromatic harmony.
 
+## ADT Double Tracker
+
+A stereo artificial double tracker. It adds a second, slightly late copy of the signal, the way a real second take sits a little behind the first, and gives you separate control over both. Moving the delay bends the pitch of the delayed copy, like a tape machine whose speed is being nudged.
+
+### How it works
+
+The input is split into two paths:
+
+- **SRC:** the original signal.
+- **ADT:** the delayed second take.
+
+**Varispeed Delay** sets how far apart they are. A positive value delays ADT relative to SRC. A negative value delays SRC relative to ADT, so the sign decides which path is the late one. The editor shows a ruler from -40 to +40 ms with a marker for the ADT path at its current delay. The marker dims when the ADT path is muted or switched off.
+
+Each path has its own **Pan**, **Drive**, **Level**, **Mute** and **Phase**. Other parts of the model:
+
+- **Drive:** a tanh saturator placed before the delay line, with up to 24 dB of pre-gain. The level is partly compensated (the signal is lowered by half the pre-gain, in dB), so heavy drive is louder on quiet material while the peaks stay lower. At 0 it is bypassed.
+- **Smoothing:** the delay moves toward its target with a time constant of about 20 ms, and the gains with about 10 ms. Changing the delay, or letting the LFO move it, therefore bends the pitch of the delayed path and never clicks.
+- **LFO:** modulates the delay by +/- **LFO Range** around the Varispeed Delay, free-running in Hz or locked to the project tempo. The total delay (varispeed plus LFO) is limited to +/-40 ms.
+- **Pan law:** with **Input Source** at Left or Right the signal is a mono source and the pan is constant-power (-3 dB at the centre). With L+R the stereo image is kept and the pan works as a balance control, which only turns down the opposite side.
+- **Interpolation:** the delay lines are read with 4-point Hermite interpolation.
+- **Latency:** both paths carry a fixed 2-sample offset that the interpolator needs. It is reported to REAPER, so plugin delay compensation keeps the track in time.
+
+For a sine LFO the peak pitch swing is about 11 cents x Rate (Hz) x Range (ms), so the defaults give roughly +/-3 cents. These are approximate, worked out from the speed of the delay. The 20 ms smoothing also rounds off the LFO, so rates above about 8 Hz lose depth (roughly 40% less at 10 Hz).
+
+### Usage
+
+1. Put the effect on an audio track with a single part, such as a vocal or a guitar.
+2. Choose the **Input Source**. Use L+R for a stereo track, or Left or Right to double one channel of a track.
+3. Set **Varispeed Delay** for how late the second take is. Small values thicken the sound, and larger ones separate the two takes.
+4. Place the two paths with **SRC Pan** and **ADT Pan**. Add **Drive** to either path for a rougher second take.
+5. Use the **LFO** for a slow drift in the delay, and **Monitor: Mono** to check how the double sounds in mono.
+
+With **LFO Sync** on, the LFO follows the project tempo. While the transport is playing its phase is locked to the song position, using the project's time signature to convert bars. The LFO rate control that does not apply is hidden: **LFO Rate (Bars)** with Sync on and **LFO Rate (Hz)** with Sync off.
+
+The **Random** LFO shape picks a new random value at the start of each cycle and glides to it with a cosine curve.
+
+### Controls
+
+| Control | Range | What it does |
+| --- | --- | --- |
+| Input Source | Left, L+R, Right | Which input channel feeds the effect. Left and Right feed that channel to both sides |
+| Monitor | Stereo, Mono | Mono sums the output to mono on both channels, to check the double in mono |
+| SRC Pan | -100 to +100 | Position of the original. A balance with L+R input, a constant-power pan with Left or Right |
+| SRC Drive | 0 to 100 | Saturation on the original, before the delay. 0 is off |
+| SRC Level (dB) | -60 to +12 | Level of the original. -60 turns the path off |
+| SRC Mute | Off, On | Silences the original |
+| SRC Phase | Normal, Inverted | Flips the polarity of the original |
+| ADT Pan | -100 to +100 | Position of the second take |
+| ADT Drive | 0 to 100 | Saturation on the second take, before the delay. 0 is off |
+| ADT Level (dB) | -60 to +12 | Level of the second take. -60 turns the path off |
+| ADT Mute | Off, On | Silences the second take |
+| ADT Phase | Normal, Inverted | Flips the polarity of the second take |
+| Varispeed Delay (ms) | -40 to +40 | Delay between the two paths. Positive delays ADT, negative delays SRC |
+| Varispeed Range (+/- ms) | 1 to 40 | Caps the Varispeed Delay at plus or minus this value |
+| LFO | Off, On | Switches the delay modulation |
+| LFO Range (+/- ms) | 0 to 20 | Depth of the modulation around the Varispeed Delay |
+| LFO Rate (Bars) | 0.25 to 16 | Length of one LFO cycle in bars. Shown when LFO Sync is on |
+| LFO Rate (Hz) | 0.05 to 10 | LFO speed. Shown when LFO Sync is off |
+| LFO Sync | Off, On | Locks the LFO to the project tempo and, while playing, to the song position |
+| LFO Shape | Sine, Triangle, Random | Waveform of the modulation |
+| Output Gain (dB) | -24 to +12 | Level out of the plugin |
+
+The 21 sliders appear in this order: input and monitor (2), SRC (5), ADT (5), varispeed (2), LFO (6), output (1). Reordering them changes how saved presets and automation map to the controls.
+
+### Defaults
+
+| Setting | Default |
+| --- | --- |
+| Input Source | L+R |
+| Monitor | Stereo |
+| SRC Pan | -30 |
+| ADT Pan | +30 |
+| SRC and ADT Drive | 0 |
+| SRC and ADT Level (dB) | 0 |
+| SRC and ADT Mute | Off |
+| SRC and ADT Phase | Normal |
+| Varispeed Delay (ms) | 15 |
+| Varispeed Range (+/- ms) | 20 |
+| LFO | On |
+| LFO Range (+/- ms) | 0.5 |
+| LFO Rate (Bars) | 2 |
+| LFO Rate (Hz) | 0.5 |
+| LFO Sync | Off |
+| LFO Shape | Sine |
+| Output Gain (dB) | 0 |
+
 ## Boss CE-1 Chorus Ensemble
 
 A chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble, the 1976 pedal built from the chorus circuit of the Roland JC-120 amp. The signal goes through a modulated delay line that stands in for the original's bucket-brigade (BBD) chip. It adds no latency, because the delay line is the effect.
@@ -499,7 +586,7 @@ The whole fuzz path runs at 2x oversampling, with a 4th-order Butterworth low-pa
 3. In the FX browser, press **F5** to refresh, or restart REAPER.
 4. Add the effect to a track:
    - **JS: Harmony (scale/chord MIDI processor)** or **JS: Block Chords (melody harmonizer)** on a MIDI track
-   - **JS: Boss CE-1 Chorus Ensemble**, **JS: Dallas Arbiter Rangemaster Treble Booster**, **JS: Maestro FZ-1 Fuzz-Tone** on an audio track
+   - **JS: ADT Double Tracker**, **JS: Boss CE-1 Chorus Ensemble**, **JS: Dallas Arbiter Rangemaster Treble Booster**, **JS: Maestro FZ-1 Fuzz-Tone** on an audio track
 
 REAPER stores slider values with the project and with FX presets. If you change the defaults in the file and an existing instance still shows the old values, add a fresh instance.
 
