@@ -1611,31 +1611,57 @@ file_var(0, scp_n); file_mem(0, A_SCP, LIST_MAX);
 crp_n = max(0, min(LIST_MAX, crp_n)); cri_n = max(0, min(LIST_MAX, cri_n)); scp_n = max(0, min(LIST_MAX, scp_n));
 lists_ver += 1;
 
-@gfx 1010 530
+@gfx 1500 826
 // =====================================================================
-//  GUI  (design size 1010 x 530, scaled uniformly to fit the window)
+//  GUI  (design space: the plugin page is 1100 x 576 units, with a square 3D-helix card to its right;
+//  everything is scaled uniformly to fit the window, so text and the helix are never stretched)
 // =====================================================================
-DW = 1010; DH = 530;
+hx_init0 == 0 ? ( hx_init0 = 1; hx_show = 1; );   // 3D helix card visible by default
+AH = 250;                                         // scale-analysis card height below the panels: always reserved, so opening/closing it never changes the layout or scale
+LW = 1100;                                        // width of the plugin page (design units)
+PGH = 576 + AH;                                   // height of the plugin page incl. the analysis card
+HXWMIN = 400;                                     // minimum width reserved for the helix column
+// hx_full = the visualizer as its own full-window page (no panels).
+// Otherwise the helix is a square in the column to the right of the panels; it grows with the window
+// (limited by the width left over and by the height, minus room for its controls underneath).
+hx_full ? (
+  // expanded: the visualizer fills the whole window
+  usx = max(0.3, gfx_w / LW); usy = usx; DWE = LW; DHE = gfx_h / usy;
+  HXx = 0; HXy = 0; HXw = LW; HXh = DHE;
+) : hx_show ? (
+  usx = max(0.3, min(gfx_w / (LW + HXWMIN), gfx_h / PGH)); usy = usx;
+  DWE = gfx_w / usx; DHE = gfx_h / usy;
+  // the square's bottom edge always lines up with the bottom of the editor panels (y 566); the controls stay on the INPUT bar row (y 6)
+  // and the legend is drawn inside the square. The square is as wide as the column allows, up to 530 (room for the controls row above it).
+  HS = max(80, min(DWE - LW - 10, 530));
+  HXy = 566 - HS;
+  HXx = LW; HXw = HS; HXh = HS;
+) : (
+  // visualizer hidden: the editor stretches to fill the window (text follows the smaller of the two factors)
+  usx = max(0.3, gfx_w / LW); usy = max(0.3, gfx_h / PGH); DWE = LW; DHE = PGH;
+  HXx = LW; HXy = 36; HXw = 0; HXh = 0;
+);
+uis = min(usx, usy);
 PCNAMES = "C C#D D#E F F#G G#A A#B ";
 
 function hit(x, y, w, h) ( mx >= x && mx < x + w && my >= y && my < y + h; );
-function fr(x, y, w, h) ( gfx_rect(ox + x * uis, oy + y * uis, w * uis, h * uis); );
-function ft(x, y, s, fi) ( gfx_setfont(fi); gfx_x = ox + x * uis; gfx_y = oy + y * uis; gfx_drawstr(s); );
+function fr(x, y, w, h) ( gfx_rect(ox + x * usx, oy + y * usy, w * usx, h * usy); );
+function ft(x, y, s, fi) ( gfx_setfont(fi); gfx_x = ox + x * usx; gfx_y = oy + y * usy; gfx_drawstr(s); );
 function ftc(x, y, w, h, s, fi) local(tw, th) (
   gfx_setfont(fi); gfx_measurestr(s, tw, th);
-  gfx_x = ox + (x + w / 2) * uis - tw / 2; gfx_y = oy + (y + h / 2) * uis - th / 2; gfx_drawstr(s);
+  gfx_x = ox + (x + w / 2) * usx - tw / 2; gfx_y = oy + (y + h / 2) * usy - th / 2; gfx_drawstr(s);
 );
 function ftr(x, y, w, s, fi) local(tw, th) (   // right aligned, x = left edge of box of width w
   gfx_setfont(fi); gfx_measurestr(s, tw, th);
-  gfx_x = ox + (x + w) * uis - tw; gfx_y = oy + y * uis; gfx_drawstr(s);
+  gfx_x = ox + (x + w) * usx - tw; gfx_y = oy + y * usy; gfx_drawstr(s);
 );
 function fit_head(s, maxw, fi) local(tw, th, len) (   // keep the beginning, trim the end
   gfx_setfont(fi); gfx_measurestr(s, tw, th); len = strlen(s);
-  while (tw > maxw * uis && len > 1) ( len -= 1; str_setlen(s, len); gfx_measurestr(s, tw, th); );
+  while (tw > maxw * usx && len > 1) ( len -= 1; str_setlen(s, len); gfx_measurestr(s, tw, th); );
 );
 function fit_tail(s, maxw, fi) local(tw, th) (     // keep the end, trim the beginning
   gfx_setfont(fi); gfx_measurestr(s, tw, th);
-  while (tw > maxw * uis && strlen(s) > 1) ( str_delsub(s, 0, 1); gfx_measurestr(s, tw, th); );
+  while (tw > maxw * usx && strlen(s) > 1) ( str_delsub(s, 0, 1); gfx_measurestr(s, tw, th); );
 );
 function pcname(pc, dst) ( strcpy_substr(dst, PCNAMES, pc * 2, (pc == 1 || pc == 3 || pc == 6 || pc == 8 || pc == 10) ? 2 : 1); );
 function note_name(n, dst) ( nn_name_oct(n, dst); );   // spelled according to the live scale
@@ -1652,10 +1678,16 @@ function btn(x, y, w, h, s, on, fi) local(hov) (
 function set_sl_ui(si, v) ( slider(si) != v ? ( slider(si) = v; slider_automate(2^(si - 1)); ); );
 function tog(x, y, w, h, s, si) ( btn(x, y, w, h, s, slider(si) > 0.5, 1) ? set_sl_ui(si, slider(si) > 0.5 ? 0 : 1); );
 function opt(x, y, w, h, s, si, val) ( btn(x, y, w, h, s, slider(si) == val, 1) ? set_sl_ui(si, val); );
+// text width in design units, measured with the real font (so layouts adapt to whatever Arial maps to on this system)
+function tw_(s, fi) local(w, h) ( gfx_setfont(fi); gfx_measurestr(s, w, h); w / usx; );
+// auto-width widgets: width = text + padding; they return the x advance so rows can be chained: ix += sopt(ix, ...)
+function sopt(x, y, h, s, si, val) local(w) ( w = tw_(s, 1) + 14; opt(x, y, w, h, s, si, val); w + 3; );
+function stog(x, y, h, s, si) local(w) ( w = tw_(s, 1) + 14; tog(x, y, w, h, s, si); w + 3; );
+function sbtn(x, y, h, s, on) local(w) ( w = tw_(s, 1) + 14; sb_hit = btn(x, y, w, h, s, on, 1); w + 3; );
 // value box with label: click left/right half = -1/+1, drag, wheel, right-click = default
 function stepper(x, y, w, lw, label, si, vmin, vmax, fmt, dflt) local(bx, bw, v, nv, hov, id) (
   bx = x + lw; bw = w - lw; v = slider(si); nv = v; id = 100 + si;
-  hov = hit(bx, y, bw, 20);
+  hov = hit(bx, y, bw, 22);
   (hov && wheel != 0) ? ( nv = v + (wheel > 0 ? 1 : -1); wheel = 0; );
   (hov && rclick) ? ( nv = dflt; );
   (hov && mclick) ? ( act_id = id; drag_x0 = mx; drag_v0 = v; drag_moved = 0; );
@@ -1673,15 +1705,15 @@ function stepper(x, y, w, lw, label, si, vmin, vmax, fmt, dflt) local(bx, bw, v,
   v = slider(si);
   lw > 0 ? ( gfx_set(0.60, 0.62, 0.67, 1); ft(x, y + 3, label, 1); );
   (hov || act_id == id) ? gfx_set(0.27, 0.30, 0.37, 1) : gfx_set(0.18, 0.20, 0.25, 1);
-  fr(bx, y, bw, 20);
+  fr(bx, y, bw, 22);
   gfx_set(0.45, 0.47, 0.52, 1);
-  gfx_triangle(ox + (bx + 9) * uis, oy + 6 * uis + y * uis, ox + (bx + 9) * uis, oy + 14 * uis + y * uis, ox + (bx + 4) * uis, oy + 10 * uis + y * uis);
-  gfx_triangle(ox + (bx + bw - 9) * uis, oy + 6 * uis + y * uis, ox + (bx + bw - 9) * uis, oy + 14 * uis + y * uis, ox + (bx + bw - 4) * uis, oy + 10 * uis + y * uis);
+  gfx_triangle(ox + (bx + 9) * usx, oy + (7 + y) * usy, ox + (bx + 9) * usx, oy + (15 + y) * usy, ox + (bx + 4) * usx, oy + (11 + y) * usy);
+  gfx_triangle(ox + (bx + bw - 9) * usx, oy + (7 + y) * usy, ox + (bx + bw - 9) * usx, oy + (15 + y) * usy, ox + (bx + bw - 4) * usx, oy + (11 + y) * usy);
   fmt == 1 ? ( nn_rname(pmod(v, 12), #vs); ) :     // root name from the precomputed table: correct on the same frame
  
   fmt == 2 ? ( v == 0 ? strcpy(#vs, "Same") : sprintf(#vs, "%d", v); ) :
              ( sprintf(#vs, "%d", v); );
-  gfx_set(0.95, 0.94, 0.90, 1); ftc(bx, y, bw, 20, #vs, 1);
+  gfx_set(0.95, 0.94, 0.90, 1); ftc(bx, y, bw, 22, #vs, 1);
 );
 function section(x, y, w, h, num, title) (
   gfx_set(0.105, 0.12, 0.145, 1); fr(x, y, w, h);
@@ -1752,7 +1784,7 @@ function tf_run(id, x, y, w, h, mode) local(res, hov, c, len, ok, k, blink) (
     fit_head(#tfdraw, w - 10, 1);
     gfx_set(0.85, 0.85, 0.82, 1);
   );
-  ft(x + 5, y + (h - 14) / 2, #tfdraw, 1);
+  ft(x + 5, y + (h - 16) / 2, #tfdraw, 1);
   res;
 );
 // editable value chips: click +1, right-click -1, shift-click removes, [+] appends
@@ -1761,13 +1793,13 @@ function chips(x, y, id, minv) local(p, n, k, cx, cy, hov, v, j, shown, per, row
   shown = min(n + 1, per * rows);
   k = 0;
   loop(shown,
-    cx = x + (k % per) * 28; cy = y + floor(k / per) * 22;
-    hov = hit(cx, cy, 25, 20);
+    cx = x + (k % per) * 30.5; cy = y + floor(k / per) * 24;
+    hov = hit(cx, cy, 28, 22);
     k < n ? (
       v = p[k];
       hov ? gfx_set(0.30, 0.34, 0.42, 1) : gfx_set(0.20, 0.23, 0.29, 1);
-      fr(cx, cy, 25, 20);
-      gfx_set(0.95, 0.94, 0.90, 1); sprintf(#ch_s, "%d", v); ftc(cx, cy, 25, 20, #ch_s, 1);
+      fr(cx, cy, 28, 22);
+      gfx_set(0.95, 0.94, 0.90, 1); sprintf(#ch_s, "%d", v); ftc(cx, cy, 28, 22, #ch_s, 1);
       hov && mclick ? (
         shiftk ? (
           j = k; loop(n - 1 - k, p[j] = p[j + 1]; j += 1;);
@@ -1777,8 +1809,8 @@ function chips(x, y, id, minv) local(p, n, k, cx, cy, hov, v, j, shown, per, row
       (hov && rclick) ? ( p[k] = max(minv, v - 1); lists_ver += 1; );
     ) : (
       hov ? gfx_set(0.30, 0.34, 0.42, 1) : gfx_set(0.14, 0.16, 0.20, 1);
-      fr(cx, cy, 25, 20);
-      gfx_set(0.93, 0.62, 0.28, 1); ftc(cx, cy, 25, 20, "+", 1);
+      fr(cx, cy, 28, 22);
+      gfx_set(0.93, 0.62, 0.28, 1); ftc(cx, cy, 28, 22, "+", 1);
       (hov && mclick && n < LIST_MAX) ? (
         p[n] = n > 0 ? p[n - 1] + (id == 2 ? 2 : 0) : (id == 2 ? 0 : 2);
         list_set_len(id, n + 1);
@@ -1788,24 +1820,26 @@ function chips(x, y, id, minv) local(p, n, k, cx, cy, hov, v, j, shown, per, row
   );
   used = ceil(shown / per);
   n + 1 > per * rows ? (
-    gfx_set(0.55, 0.57, 0.62, 1); sprintf(#more, "+%d more (edit with the text field)", n + 1 - per * rows); ft(x, y + rows * 22, #more, 3);
+    gfx_set(0.55, 0.57, 0.62, 1); sprintf(#more, "+%d more (edit with the text field)", n + 1 - per * rows); ft(x, y + rows * 24, #more, 3);
   ) : (
-    gfx_set(0.45, 0.47, 0.52, 1); ft(x, y + used * 22 + 2, "click +1, right-click -1, shift-click delete", 3);
+    gfx_set(0.45, 0.47, 0.52, 1);
+    ft(x, y + used * 24 + 2, "click +1, right-click -1,", 3);
+    ft(x, y + used * 24 + 15, "shift-click deletes", 3);
   );
 );
 // row of 12 pitch-class cells; returns clicked pc or -1. spell = 1: active cells use the scale's spelling
 function pc_row(x, y, mask, clickable, spell) local(k, cx, on, hov, res, blk) (
   res = -1; k = 0;
   loop(12,
-    cx = x + k * 18.7;
+    cx = x + k * 20.5;
     on = bitv(mask, k);
     blk = (k == 1 || k == 3 || k == 6 || k == 8 || k == 10);
-    hov = clickable && hit(cx, y, 17, 20);
+    hov = clickable && hit(cx, y, 19, 20);
     on ? gfx_set(0.93, 0.62, 0.28, 1) : ( hov ? gfx_set(0.27, 0.30, 0.37, 1) : ( blk ? gfx_set(0.10, 0.11, 0.14, 1) : gfx_set(0.20, 0.22, 0.27, 1) ) );
-    fr(cx, y, 17, 20);
+    fr(cx, y, 19, 20);
     on ? gfx_set(0.08, 0.09, 0.11, 1) : gfx_set(0.62, 0.63, 0.66, 1);
     nn_name(k, #pcl);
-    ftc(cx, y, 17, 20, #pcl, 3);
+    ftc(cx, y, 19, 20, #pcl, 3);
     (clickable && hov && mclick) ? ( res = k; );
     k += 1;
   );
@@ -1888,18 +1922,463 @@ function draw_kbd(x0, y0, w, h) local(low, n, pc, wi, kw, kx, isb, bw, nn) (
 );
 
 // =====================================================================
+//  3D HELIX  (software-rendered port of the Three.js view)
+//  JSFX has no WebGL, so the same scene is projected by hand in EEL2:
+//  120 lattice points (10 octaves x 12 pitch classes) on a helix, a
+//  quaternion-free orbit camera (orthonormal basis, composed drags, so no
+//  gimbal lock / upside-down is possible), perspective divide, painter's
+//  algorithm for depth. Drawn into an off-screen image so it clips cleanly.
+// =====================================================================
+HX_N = 200000;                       // memory block clear of every other region in this file
+HX_WX = HX_N;  HX_WY = HX_N + 128; HX_WZ = HX_N + 256;      // lattice world coords
+HX_SX = HX_N + 384; HX_SY = HX_N + 512; HX_SD = HX_N + 640; // screen x, y, depth
+HX_SR = HX_N + 768; HX_ST = HX_N + 896; HX_OR = HX_N + 1024; // radius px, role flags, draw order
+HX_CS = HX_N + 1152; HX_SN = HX_N + 1216;                    // unit-circle cos / sin for the ring guides
+HX_CL = HX_N + 1280;                                         // chord sphere indices (sorted)
+HX_PCF = HX_N + 1400;                                        // pitch-class-in-scale flags (12)
+HX_NP = 120; HX_SEG = 48; HX_RR = 5; HX_LH = 0.85; HX_OCT = 10;
+
+function hx_reset_view() local(az, el) (
+  az = 15 * $pi / 180; el = 22 * $pi / 180;
+  hx_ezx = cos(el) * cos(az); hx_ezy = sin(el); hx_ezz = cos(el) * sin(az);
+  hx_exx = hx_ezz; hx_exy = 0; hx_exz = -hx_ezx;                       // x = up(0,1,0) x z
+  hx_ex_l = sqrt(hx_exx * hx_exx + hx_exz * hx_exz);
+  hx_exx /= hx_ex_l; hx_exz /= hx_ex_l;
+  hx_eyx = hx_ezy * hx_exz - hx_ezz * hx_exy;                          // y = z x x
+  hx_eyy = hx_ezz * hx_exx - hx_ezx * hx_exz;
+  hx_eyz = hx_ezx * hx_exy - hx_ezy * hx_exx;
+  hx_dist = 17;
+);
+function hx_init_lattice() local(n, layer, a) (
+  n = 0;
+  loop(HX_NP,
+    layer = floor(n / 12); a = (n - layer * 12) / 12 * 2 * $pi;
+    HX_WX[n] = HX_RR * cos(a); HX_WY[n] = layer * HX_LH; HX_WZ[n] = HX_RR * sin(a);
+    n += 1;
+  );
+  n = 0; loop(HX_SEG, a = n / HX_SEG * 2 * $pi; HX_CS[n] = cos(a); HX_SN[n] = sin(a); n += 1;);
+);
+function hx_ortho() local(l, d) (
+  l = sqrt(hx_exx * hx_exx + hx_exy * hx_exy + hx_exz * hx_exz); hx_exx /= l; hx_exy /= l; hx_exz /= l;
+  d = hx_eyx * hx_exx + hx_eyy * hx_exy + hx_eyz * hx_exz;
+  hx_eyx -= d * hx_exx; hx_eyy -= d * hx_exy; hx_eyz -= d * hx_exz;
+  l = sqrt(hx_eyx * hx_eyx + hx_eyy * hx_eyy + hx_eyz * hx_eyz); hx_eyx /= l; hx_eyy /= l; hx_eyz /= l;
+  hx_ezx = hx_exy * hx_eyz - hx_exz * hx_eyy;
+  hx_ezy = hx_exz * hx_eyx - hx_exx * hx_eyz;
+  hx_ezz = hx_exx * hx_eyy - hx_exy * hx_eyx;
+);
+// pitch: rotate about the camera's own X axis; yaw: rotate about world Y. Same composition as the Three.js version.
+function hx_rotate(yaw, pitch) local(c, s, t1, t2, t3) (
+  c = cos(pitch); s = sin(pitch);
+  t1 = hx_eyx * c + hx_ezx * s; t2 = hx_eyy * c + hx_ezy * s; t3 = hx_eyz * c + hx_ezz * s;
+  hx_ezx = hx_ezx * c - hx_eyx * s; hx_ezy = hx_ezy * c - hx_eyy * s; hx_ezz = hx_ezz * c - hx_eyz * s;
+  hx_eyx = t1; hx_eyy = t2; hx_eyz = t3;
+  c = cos(yaw); s = sin(yaw);
+  t1 = hx_exx * c + hx_exz * s; hx_exz = -hx_exx * s + hx_exz * c; hx_exx = t1;
+  t1 = hx_eyx * c + hx_eyz * s; hx_eyz = -hx_eyx * s + hx_eyz * c; hx_eyx = t1;
+  t1 = hx_ezx * c + hx_ezz * s; hx_ezz = -hx_ezx * s + hx_ezz * c; hx_ezx = t1;
+  hx_ortho();
+);
+// world -> screen. Sets hx_qx, hx_qy (pixels) and hx_qd (depth, <= 0.1 means behind the camera)
+function hx_proj(wx, wy, wz) local(px, py, pz, vx, vy, vz) (
+  px = wx; py = wy - 4.25; pz = wz;                       // target = middle of the helix
+  vx = px * hx_exx + py * hx_exy + pz * hx_exz;
+  vy = px * hx_eyx + py * hx_eyy + pz * hx_eyz;
+  vz = px * hx_ezx + py * hx_ezy + pz * hx_ezz;
+  hx_qd = hx_dist - vz;
+  hx_qd > 0.1 ? ( hx_qx = hx_cx + hx_f * vx / hx_qd; hx_qy = hx_cy - hx_f * vy / hx_qd; );
+);
+// role -> colour (anchor > chord > root > scale > idle), alpha from depth
+function hx_col(st, fade) (
+  (st & 8) ? gfx_set(0.72, 0.36, 0.36, fade) :
+  (st & 4) ? gfx_set(0.85, 0.56, 0.28, fade) :
+  (st & 2) ? gfx_set(0.95, 0.71, 0.42, fade) :
+  (st & 1) ? gfx_set(0.36, 0.55, 0.72, fade) :
+             gfx_set(0.20, 0.23, 0.29, fade);
+);
+function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp, a, b, lo, hi, anc, q, sh, found, v, same) (
+  hx_cx = w / 2; hx_cy = h / 2; hx_f = (h / 2) / tan(25 * $pi / 180);    // 50 deg vertical FOV
+  gfx_set(0.105, 0.12, 0.145, 1); gfx_rect(0, 0, w, h);
+
+  // ---- which lattice points play which role ----
+  i = 0; loop(HX_NP, HX_ST[i] = 0; i += 1;);
+  i = 0; loop(12, HX_PCF[i] = 0; i += 1;);
+  sa = cx_neg ? A_EFF : A_SC;                                 // Chord Negative shows the reflected scale, like the web view
+  i = 0; loop(sc_n, HX_PCF[pmod(sa[i], 12)] = 1; i += 1;);
+  n = 0; loop(HX_NP, HX_PCF[n - floor(n / 12) * 12] ? ( HX_ST[n] = 1; ); n += 1;);
+  (sc_n > 0 && sa[0] >= 0 && sa[0] < HX_NP) ? ( HX_ST[floor(sa[0])] |= 2; );
+  ccnt = 0;
+  i = 0; loop(cm_n,
+    n = A_CHM[i] - 12;                                        // MIDI -> step space (C0 = 0)
+    (n >= 0 && n < HX_NP) ? ( HX_ST[n] |= 4; HX_CL[ccnt] = n; ccnt += 1; );
+    i += 1;
+  );
+  // anchor = the scale degree the chord is built from, folded onto the bottom ring
+  sh = floor(ch_shift + 0.5);
+  (cx_neg && sc_n > 0) ? ( q = sh / sc_n; q = q >= 0 ? floor(q) : ceil(q); sh = sh - 2 * (sh - sc_n * q); );
+  found = 0; mn = 0;
+  cr_type == 0 ? (
+    i = 0; loop(crp_n, v = A_CRP[i]; (v >= 0 && (found == 0 || v < mn)) ? ( mn = v; found = 1; ); i += 1;);
+    anc = mn + sh;
+  ) : ( found = cri_n > 0; anc = sh; );
+  (found && sc_n > 0) ? (
+    n = pmod(pv_el(sa, sc_n, calc_range(sa, sc_n, 12), anc), 12);
+    HX_ST[n] |= 8;
+  );
+
+  // ---- project every lattice point ----
+  i = 0;
+  loop(HX_NP,
+    hx_proj(HX_WX[i], HX_WY[i], HX_WZ[i]);
+    HX_SX[i] = hx_qx; HX_SY[i] = hx_qy; HX_SD[i] = hx_qd;
+    st = HX_ST[i];
+    r = (st & 8) ? 1.6 : (st & 4) ? 1.55 : (st & 2) ? 1.5 : 1;
+    HX_SR[i] = max(1.2, 0.11 * r * hx_f / max(0.1, hx_qd));
+    HX_OR[i] = i;
+    i += 1;
+  );
+  // painter's order: far -> near (insertion sort; the order is nearly sorted frame to frame)
+  i = 1;
+  loop(HX_NP - 1,
+    v = HX_OR[i]; a = HX_SD[v]; j = i - 1;
+    while (j >= 0 && HX_SD[HX_OR[j]] < a) ( HX_OR[j + 1] = HX_OR[j]; j -= 1; );
+    HX_OR[j + 1] = v;
+    i += 1;
+  );
+
+  // ---- octave ring guides ----
+  gfx_set(0.95, 0.94, 0.91, 0.10);
+  layer = 0;
+  loop(HX_OCT + 1,
+    k = 0;
+    loop(HX_SEG,
+      hx_proj(HX_RR * HX_CS[k], layer * HX_LH, HX_RR * HX_SN[k]); a = hx_qx; b = hx_qy; lo = hx_qd;
+      j = k + 1 >= HX_SEG ? 0 : k + 1;
+      hx_proj(HX_RR * HX_CS[j], layer * HX_LH, HX_RR * HX_SN[j]);
+      (lo > 0.1 && hx_qd > 0.1) ? gfx_line(a, b, hx_qx, hx_qy, 1);
+      k += 1;
+    );
+    layer += 1;
+  );
+
+  // ---- spheres, far to near ----
+  i = 0;
+  loop(HX_NP,
+    n = HX_OR[i];
+    (HX_SD[n] > 0.1) ? (
+      st = HX_ST[n];
+      fade = max(0.35, min(1, 1.15 - (HX_SD[n] - (hx_dist - 6)) / 24));
+      hx_col(st, st ? 1 : fade);
+      gfx_circle(HX_SX[n], HX_SY[n], HX_SR[n], 1, 1);
+      st >= 2 ? ( hx_col(st, 0.25); gfx_circle(HX_SX[n], HX_SY[n], HX_SR[n] * 1.6, 0, 1); );   // soft halo on the important notes
+    );
+    i += 1;
+  );
+
+  // ---- chord polygon: lowest -> highest, closed only when both ends share an octave ring ----
+  ccnt > 1 ? (
+    sort_asc(HX_CL, ccnt);
+    same = floor((HX_CL[ccnt - 1] - HX_CL[0]) / 12) == 0;
+    gfx_set(0.85, 0.56, 0.28, 0.65);
+    i = 0;
+    loop(same ? ccnt : ccnt - 1,
+      a = HX_CL[i]; b = HX_CL[i + 1 >= ccnt ? 0 : i + 1];
+      (HX_SD[a] > 0.1 && HX_SD[b] > 0.1) ? gfx_line(HX_SX[a], HX_SY[a], HX_SX[b], HX_SY[b], 1);
+      i += 1;
+    );
+    // redraw the chord spheres on top so the polygon never covers them
+    i = 0;
+    loop(ccnt,
+      n = HX_CL[i]; st = HX_ST[n];
+      (HX_SD[n] > 0.1) ? ( hx_col(st, 1); gfx_circle(HX_SX[n], HX_SY[n], HX_SR[n], 1, 1); );
+      i += 1;
+    );
+  );
+);
+function hx_leg(x, y, r, g, b, s) local(tw, th) (   // legend entry; returns its width so entries can be chained
+  gfx_set(r, g, b, 1); gfx_circle(ox + (x + 5) * usx, oy + (y + 10) * usy, 4.5 * uis, 1, 1);
+  gfx_set(0.60, 0.62, 0.67, 1); ft(x + 14, y + 3, s, 3);
+  gfx_setfont(3); gfx_measurestr(s, tw, th);
+  16 + tw / usx + 10;
+);
+// helix controls strip (308 x 22): expand/back, play/pause icon (drawn, so it never depends on font glyphs), speed, reset
+function hx_controls(cx, cy) (
+  btn(cx, cy, 70, 22, hx_full ? "Back" : "Expand", 0, 1) ? ( hx_full = 1 - hx_full; tf_id = 0; );
+  btn(cx + 76, cy, 30, 22, "", 0, 1) ? ( hx_paused = 1 - hx_paused; );
+  gfx_set(0.93, 0.92, 0.88, 1);
+  hx_paused ? (
+    gfx_triangle(ox + (cx + 86) * usx, oy + (cy + 5) * usy, ox + (cx + 86) * usx, oy + (cy + 17) * usy, ox + (cx + 97) * usx, oy + (cy + 11) * usy);
+  ) : (
+    fr(cx + 85, cy + 5, 4, 12); fr(cx + 93, cy + 5, 4, 12);
+  );
+  gfx_set(0.60, 0.62, 0.67, 1); ft(cx + 114, cy + 4, "speed", 3);
+  btn(cx + 150, cy, 22, 22, "-", 0, 1) ? ( hx_speed = max(0.25, hx_speed - 0.25); );
+  sprintf(#hx_sp, "%.2fx", hx_speed); gfx_set(0.95, 0.94, 0.90, 1); ftc(cx + 172, cy, 46, 22, #hx_sp, 1);
+  btn(cx + 218, cy, 22, 22, "+", 0, 1) ? ( hx_speed = min(4, hx_speed + 0.25); );
+  btn(cx + 246, cy, 62, 22, "Reset", 0, 1) ? ( hx_reset_view(); );
+);
+
+// =====================================================================
+//  SCALE ANALYSIS  (port of the HTML analysis panel)
+//  Works on the scale with only Mode / Mirror / Negative applied (Root, Degree
+//  and Invert only move or rotate it without changing its interval content),
+//  normalised so the lowest pitch class is 0. Runs on the GUI thread with its
+//  own private memory, so it never touches the audio thread's scratch arrays.
+// =====================================================================
+AN = 210000;
+AN_P = AN; AN_T = AN + 64; AN_IV = AN + 128; AN_IV2 = AN + 192; AN_OC = AN + 256;
+AN_BIN = AN + 272; AN_BM = AN + 288; AN_W = AN + 304; AN_RF = AN + 320; AN_RT = AN + 352;
+AN_SPF = AN + 512; AN_G = AN + 768;
+
+function an_build() local(n, i, s0, sl, mn, axis, pc) (
+  n = bn; an_n = n;
+  n < 2 ? ( an_ok = 0; ) : (
+    an_ok = 1;
+    copy_arr(AN_P, A_BP, n);
+    (tx_mode != 0) ? (
+      pos_to_iv(AN_P, n, AN_IV);
+      i = 0; loop(n, AN_IV2[i] = AN_IV[pmod(tx_mode + i, n)]; i += 1;);
+      iv_to_pos(AN_P[0], AN_IV2, n, AN_T);
+      copy_arr(AN_P, AN_T, n);
+    );
+    tx_mir ? (
+      sort_asc(AN_P, n);
+      s0 = AN_P[0]; sl = AN_P[n - 1];
+      i = 0; loop(n, AN_T[i] = s0 + sl - AN_P[n - 1 - i]; i += 1;);
+      copy_arr(AN_P, AN_T, n);
+    );
+    tx_neg ? (
+      axis = pmod(tx_root * 2 + 7, 12);
+      i = 0; loop(n, pc = pmod(AN_P[i], 12); AN_P[i] = AN_P[i] - pc + pmod(axis - pc, 12); i += 1;);
+      sort_asc(AN_P, n);
+    );
+    mn = 1000000; i = 0;
+    loop(n, AN_T[i] = pmod(AN_P[i], 12); (AN_T[i] < mn) ? ( mn = AN_T[i]; ); i += 1;);
+    i = 0; loop(n, AN_P[i] = pmod(AN_T[i] - mn, 12); i += 1;);
+    sort_asc(AN_P, n);
+  );
+);
+
+function an_stats(n) local(i, j, d, c, R, ok, first, ones, p1, p0, cur, t, ad, mn, mx, s, sum, cs, sn, m) (
+  // geodesic distance occurrences (1..6)
+  i = 0; loop(7, AN_OC[i] = 0; i += 1;);
+  i = 0;
+  loop(n,
+    j = i + 1;
+    loop(n - i - 1, d = pmod(AN_P[j] - AN_P[i], 12); (d > 6) ? ( d = 12 - d; ); AN_OC[d] += 1; j += 1;);
+    i += 1;
+  );
+  // Winograd-deep: every distance 1..k-1 occurs, each a different number of times
+  i = 0; loop(80, AN_G[i] = 0; i += 1;);
+  an_win = 1; i = 1;
+  loop(n - 1,
+    c = (i <= 6) ? AN_OC[i] : 0;
+    (c == 0) ? ( an_win = 0; ) : ( AN_G[c] ? ( an_win = 0; ) : ( AN_G[c] = 1; ); );
+    i += 1;
+  );
+  // Erdos-deep: every distance that occurs has its own count
+  i = 0; loop(80, AN_G[i] = 0; i += 1;);
+  an_erd = 1; i = 0;
+  loop(7, c = AN_OC[i]; (c > 0) ? ( AN_G[c] ? ( an_erd = 0; ) : ( AN_G[c] = 1; ); ); i += 1;);
+  // Euclidean / Bjorklund: some rotation of (intervals with first+1, last-1) equals the intervals
+  R = calc_range(AN_P, n, 12);
+  i = 0; loop(n, AN_IV[i] = pv_el(AN_P, n, R, i + 1) - pv_el(AN_P, n, R, i); AN_T[i] = AN_IV[i]; i += 1;);
+  AN_T[0] += 1; AN_T[n - 1] -= 1;
+  an_euc = 0; i = 0;
+  loop(n,
+    first = AN_T[0]; j = 0; loop(n - 1, AN_T[j] = AN_T[j + 1]; j += 1;); AN_T[n - 1] = first;
+    ok = 1; j = 0; loop(n, (AN_T[j] != AN_IV[j]) ? ( ok = 0; ); j += 1;);
+    ok ? ( an_euc = 1; );
+    i += 1;
+  );
+  // regression evenness, rhythmic oddity
+  an_even = 0; i = 0; loop(n, an_even += abs(AN_P[i] - i * 12 / n); i += 1;);
+  an_odd = 0; i = 0;
+  loop(n, j = i + 1; loop(n - i - 1, (pmod(AN_P[j] - AN_P[i], 12) == 6) ? ( an_odd += 1; ); j += 1;); i += 1;);
+  // binary pitch-class string: entropy, transition complexity, longest run
+  i = 0; loop(12, AN_BIN[i] = 0; i += 1;);
+  i = 0; loop(n, AN_BIN[pmod(AN_P[i], 12)] = 1; i += 1;);
+  ones = 0; i = 0; loop(12, ones += AN_BIN[i]; i += 1;);
+  p1 = ones / 12; p0 = 1 - p1; an_ent = 0;
+  (p1 > 0) ? ( an_ent -= p1 * log(p1) / log(2); );
+  (p0 > 0) ? ( an_ent -= p0 * log(p0) / log(2); );
+  an_txc = 0; an_lseq = 1; cur = 1; i = 1;
+  loop(11,
+    (AN_BIN[i] != AN_BIN[i - 1]) ? ( an_txc += 1; cur = 1; ) : ( cur += 1; (cur > an_lseq) ? ( an_lseq = cur; ); );
+    i += 1;
+  );
+  // distribution spectra: specific interval sizes spanned by j scale steps
+  i = 0; loop(144, AN_SPF[i] = 0; i += 1;);
+  j = 1;
+  loop(n - 1,
+    i = 0; loop(n, s = pmod(AN_P[pmod(i + j, n)] - AN_P[i], 12); AN_SPF[(j - 1) * 12 + s] = 1; i += 1;);
+    j += 1;
+  );
+  sum = 0; j = 0;
+  loop(n - 1,
+    mn = 100; mx = -100; i = 0;
+    loop(12, (AN_SPF[j * 12 + i]) ? ( (i < mn) ? ( mn = i; ); (i > mx) ? ( mx = i; ); ); i += 1;);
+    AN_W[j] = (mx >= mn) ? mx - mn : 0; sum += AN_W[j];
+    j += 1;
+  );
+  an_var = sum / (n - 1);
+  // rotational symmetry
+  an_nrot = 0; t = 1;
+  loop(11,
+    ok = 1; i = 0; loop(n, (AN_BIN[pmod(AN_P[i] + t, 12)] == 0) ? ( ok = 0; ); i += 1;);
+    ok ? ( AN_RT[an_nrot] = t; an_nrot += 1; );
+    t += 1;
+  );
+  // reflective symmetry (axes in half steps: ad / 2)
+  an_nref = 0; ad = 0;
+  loop(24,
+    ok = 1; i = 0; loop(n, (AN_BIN[pmod(ad - AN_P[i], 12)] == 0) ? ( ok = 0; ); i += 1;);
+    ok ? ( AN_RF[an_nref] = ad; an_nref += 1; );
+    ad += 1;
+  );
+  an_pal = (an_nref > 0 && AN_RF[0] == 0);
+  // chiral: no transposition of the mirror image equals the scale
+  i = 0; loop(12, AN_BM[i] = 0; i += 1;);
+  i = 0; loop(n, AN_BM[pmod(12 - AN_P[i], 12)] = 1; i += 1;);
+  an_chi = 1; t = 0;
+  loop(12,
+    ok = 1; c = 0; loop(12, (AN_BM[pmod(c - t, 12)] != AN_BIN[c]) ? ( ok = 0; ); c += 1;);
+    ok ? ( an_chi = 0; );
+    t += 1;
+  );
+  // balanced: centre of mass of the pitch-class circle sits at the origin
+  cs = 0; sn = 0; i = 0;
+  loop(n, c = AN_P[i] / 12 * 2 * $pi; cs += cos(c); sn += sin(c); i += 1;);
+  an_bal = (abs(cs) < 0.000001 && abs(sn) < 0.000001);
+  // generator: m such that {i*m mod 12 | i < k} is the scale
+  an_gen = -1; m = 1;
+  loop(11,
+    (an_gen < 0) ? (
+      i = 0; loop(n, AN_T[i] = pmod(i * m, 12); i += 1;);
+      sort_asc(AN_T, n);
+      ok = 1; i = 0; loop(n, (AN_T[i] != AN_P[i]) ? ( ok = 0; ); i += 1;);
+      ok ? ( an_gen = m; );
+    );
+    m += 1;
+  );
+);
+
+// ---- drawing ----
+function an_sh(x, y, w, s) (
+  gfx_set(0.93, 0.62, 0.28, 1); ft(x, y, s, 3);
+  gfx_set(0.20, 0.22, 0.27, 1); fr(x, y + 15, w, 1);
+);
+function an_badge(x, y, w, s, on) (
+  gfx_set(0.14, 0.16, 0.20, 1); fr(x, y, w, 20);
+  on ? gfx_set(0.43, 0.75, 0.54, 1) : gfx_set(0.27, 0.29, 0.34, 1);
+  gfx_circle(ox + (x + 10) * usx, oy + (y + 10) * usy, 3.5 * uis, 1, 1);
+  on ? gfx_set(0.43, 0.75, 0.54, 1) : gfx_set(0.50, 0.52, 0.57, 1);
+  ft(x + 20, y + 3, s, 3);
+);
+function an_row(x, y, lw, label, vs) (
+  gfx_set(0.60, 0.62, 0.67, 1); ft(x, y, label, 1);
+  gfx_set(0.93, 0.62, 0.28, 1); ft(x + lw, y, vs, 1);
+);
+function an_draw() local(i, n, x, y, d, c, shown, ad, lw, mask) (
+  section(10, 530, 1080, 240, "", "SCALE ANALYSIS");
+  an_build();
+  an_ok == 0 ? (
+    gfx_set(0.60, 0.62, 0.67, 1); ft(22, 560, "Needs at least 2 notes.", 1);
+  ) : (
+    n = an_n; an_stats(n);
+
+    // ---- representations strip: positions, inter-onset intervals, onsets, bitmask ----
+    // (the analysed scale: Mode / Mirror / Negative applied, lowest pitch class = 0, so e.g. C major = 0 2 4 5 7 9 11 / 2 2 1 2 2 2 1 / 2741)
+    strcpy(#an_s, ""); i = 0;
+    loop(n, (i > 0) ? strcat(#an_s, " "); sprintf(#an_t, "%d", AN_P[i]); strcat(#an_s, #an_t); i += 1;);
+    fit_head(#an_s, 190, 1); an_row(20, 558, tw_("Positions", 1) + 10, "Positions", #an_s);
+    strcpy(#an_s, ""); i = 0;
+    loop(n, d = (i < n - 1) ? AN_P[i + 1] - AN_P[i] : 12 - AN_P[i] + AN_P[0]; (i > 0) ? strcat(#an_s, " "); sprintf(#an_t, "%d", d); strcat(#an_s, #an_t); i += 1;);
+    fit_head(#an_s, 190, 1); an_row(290, 558, tw_("Intervals", 1) + 10, "Intervals", #an_s);
+    strcpy(#an_s, ""); i = 0;
+    loop(12, (i > 0) ? strcat(#an_s, " "); sprintf(#an_t, "%d", AN_BIN[i]); strcat(#an_s, #an_t); i += 1;);
+    fit_head(#an_s, 190, 1); an_row(560, 558, tw_("Onsets", 1) + 10, "Onsets", #an_s);
+    mask = 0; i = 0; loop(n, mask += 2^AN_P[i]; i += 1;);
+    sprintf(#an_s, "%d", mask); an_row(830, 558, tw_("Bitmask", 1) + 10, "Bitmask", #an_s);
+    gfx_set(0.20, 0.22, 0.27, 1); fr(20, 582, 1060, 1);
+
+    // ---- column A: properties, distances ----
+    an_sh(20, 590, 350, "PROPERTIES");
+    an_badge(20, 608, 112, "Euclidean", an_euc);
+    an_badge(136, 608, 112, "Winograd-deep", an_win);
+    an_badge(252, 608, 112, "Erdos-deep", an_erd);
+    an_badge(20, 632, 112, "Palindrome", an_pal);
+    an_badge(136, 632, 112, "Balanced", an_bal);
+    an_badge(252, 632, 112, "Chiral", an_chi);
+    an_sh(20, 662, 350, "DISTANCES (distance x count)");
+    shown = 0; d = 1;
+    loop(6,
+      c = AN_OC[d];
+      (c > 0) ? (
+        gfx_set(0.14, 0.16, 0.20, 1); fr(20 + shown * 56, 680, 52, 20);
+        sprintf(#an_s, "%d x %d", d, c);
+        gfx_set(0.93, 0.62, 0.28, 1); ftc(20 + shown * 56, 680, 52, 20, #an_s, 3);
+        shown += 1;
+      );
+      d += 1;
+    );
+    sprintf(#an_s, "%.3f", an_even); an_row(20, 710, 160, "Regression evenness", #an_s);
+    sprintf(#an_s, "%d", an_odd);    an_row(20, 732, 160, "Rhythmic oddity", #an_s);
+
+    // ---- column B: binary string, symmetry, generation ----
+    an_sh(390, 590, 320, "BINARY STRING");
+    sprintf(#an_s, "%.4f bits", an_ent); an_row(390, 608, 170, "Shannon entropy", #an_s);
+    sprintf(#an_s, "%d", an_txc);        an_row(390, 626, 170, "Transition complexity", #an_s);
+    sprintf(#an_s, "%d", an_lseq);       an_row(390, 644, 170, "Longest run", #an_s);
+    an_sh(390, 668, 320, "SYMMETRY");
+    strcpy(#an_s, ""); i = 0;
+    loop(an_nrot, sprintf(#an_t, "%d", AN_RT[i]); strcat(#an_s, #an_t); (i < an_nrot - 1) ? strcat(#an_s, ", "); i += 1;);
+    an_nrot == 0 ? strcpy(#an_s, "-");
+    fit_head(#an_s, 140, 1); an_row(390, 686, 170, "Rotational axes", #an_s);
+    strcpy(#an_s, ""); i = 0;
+    loop(an_nref,
+      ad = AN_RF[i];
+      (ad & 1) ? sprintf(#an_t, "%d.5", floor(ad / 2)) : sprintf(#an_t, "%d", ad / 2);
+      strcat(#an_s, #an_t); (i < an_nref - 1) ? strcat(#an_s, ", "); i += 1;
+    );
+    an_nref == 0 ? strcpy(#an_s, "-");
+    fit_head(#an_s, 140, 1); an_row(390, 704, 170, "Reflective axes", #an_s);
+    an_sh(390, 728, 320, "GENERATION");
+    an_gen >= 0 ? sprintf(#an_s, "m = %d", an_gen) : strcpy(#an_s, "none");
+    an_row(390, 746, 170, "Generator", #an_s);
+
+    // ---- column C: distribution spectra ----
+    an_sh(730, 590, 350, "DISTRIBUTION SPECTRA");
+    gfx_set(0.60, 0.62, 0.67, 1);
+    sprintf(#an_s, "variation = %.4f  (mean width)", an_var); ftr(730, 590, 350, #an_s, 3);
+    y = 608; i = 0;
+    loop(n - 1,
+      gfx_set(0.60, 0.62, 0.67, 1); sprintf(#an_s, "<%d>", i + 1); ft(730, y, #an_s, 3);
+      strcpy(#an_s, "{"); c = 0; d = 0;
+      loop(12, AN_SPF[i * 12 + d] ? ( (c > 0) ? strcat(#an_s, ", "); sprintf(#an_t, "%d", d); strcat(#an_s, #an_t); c += 1; ); d += 1;);
+      strcat(#an_s, "}");
+      fit_head(#an_s, 205, 3);
+      gfx_set(0.93, 0.62, 0.28, 1); ft(766, y, #an_s, 3);
+      sprintf(#an_s, "w=%d", AN_W[i]); gfx_set(0.36, 0.55, 0.72, 1); ft(976, y, #an_s, 3);
+      (AN_W[i] == 0) ? ( gfx_set(0.43, 0.75, 0.54, 1); ft(1016, y, "strict", 3); );
+      (AN_W[i] == 1) ? ( gfx_set(0.36, 0.55, 0.72, 1); ft(1016, y, "Myhill", 3); );
+      y += 14; i += 1;
+    );
+  );
+);
+
+// =====================================================================
 //  frame
 // =====================================================================
-LST_VIS = 11;
-uis = min(gfx_w / DW, gfx_h / DH); uis < 0.3 ? ( uis = 0.3; );
-ox = floor((gfx_w - DW * uis) / 2); oy = floor((gfx_h - DH * uis) / 2);
+LST_VIS = 10;
+ox = 0; oy = 0;
 uis != last_S ? (
-  gfx_setfont(1, "Arial", floor(12 * uis + 0.5));
-  gfx_setfont(2, "Arial", floor(22 * uis + 0.5));
-  gfx_setfont(3, "Arial", floor(10 * uis + 0.5));
+  gfx_setfont(1, "Arial", floor(14 * uis + 0.5));
+  gfx_setfont(2, "Arial", floor(24 * uis + 0.5));
+  gfx_setfont(3, "Arial", floor(12 * uis + 0.5));
   last_S = uis;
 );
-mx = (mouse_x - ox) / uis; my = (mouse_y - oy) / uis;
+mx = mouse_x / usx; my = mouse_y / usy;
 mdown = mouse_cap & 1; rdown = mouse_cap & 2;
 mclick = mdown && !(last_cap & 1); rclick = rdown && !(last_cap & 2);
 shiftk = mouse_cap & 8;
@@ -1910,24 +2389,86 @@ flt_init == 0 ? ( flt_init = 1; flt_dirty = 1; );
 gfx_clear = 18 + 20 * 256 + 25 * 65536;
 gfx_a = 1;
 
-// ---------------- input bar ----------------
-gfx_set(0.60, 0.62, 0.67, 1); ft(10, 10, "INPUT", 1);
-opt(58, 6, 56, 22, "Root", S_INMODE, 0);
-opt(116, 6, 56, 22, "Degree", S_INMODE, 1);
-opt(174, 6, 56, 22, "Auto", S_INMODE, 3);
-opt(232, 6, 56, 22, "Direct", S_INMODE, 2);
-in_mode == 3 ? (
-  opt(296, 6, 110, 22, "Modal Interchange", S_SUB, 0);
-  opt(408, 6, 84, 22, "Transposition", S_SUB, 1);
-  opt(494, 6, 56, 22, "Adaptive", S_SUB, 2);
-  gfx_set(0.60, 0.62, 0.67, 1); ft(558, 10, "dist from", 1);
-  opt(610, 6, 58, 22, "Original", 34, 0);
-  opt(670, 6, 52, 22, "Current", 34, 1);
-  tog(728, 6, 72, 22, "Autoreset", 35);
-  btn(804, 6, 56, 22, "Reset", 0, 1) ? ( act = 1; );
+// ---------------- 3D helix card (a square to the right of the panels, or the whole window when expanded) ----------------
+hx_init == 0 ? (
+  hx_init = 1; hx_paused = 0; hx_speed = 1; hx_drag = 0;
+  hx_last_t = time_precise(); hx_w = 0; hx_h = 0;
+  hx_init_lattice(); hx_reset_view();
 );
-gfx_set(0.60, 0.62, 0.67, 1); ft(872, 10, "Out ch", 1);
-stepper(912, 6, 90, 0, "", 36, 0, 16, 2, 0);
+hx_vis = hx_full || hx_show;
+hx_vis ? (
+  hx_pw = max(32, floor(HXw * usx)); hx_ph = max(32, floor(HXh * usy));
+  (hx_pw != hx_w || hx_ph != hx_h) ? ( gfx_setimgdim(1, hx_pw, hx_ph); hx_w = hx_pw; hx_h = hx_ph; );
+  hx_bar = hx_full && mouse_y >= 0 && my < 36;      // expanded: controls bar shows only while the mouse is over the top strip
+  hx_hov = hit(HXx, HXy, HXw, HXh) && !hx_bar;
+  hx_t = time_precise(); hx_dt = min(0.1, max(0, hx_t - hx_last_t)); hx_last_t = hx_t;
+  (hx_hov && wheel != 0) ? ( hx_dist = max(3, min(70, hx_dist * (wheel > 0 ? 0.9 : 1.1))); wheel = 0; );
+  (mclick && hx_hov) ? ( hx_drag = 1; hx_mx0 = mouse_x; hx_my0 = mouse_y; );
+  hx_drag ? (
+    mdown ? (
+      hx_rotate((mouse_x - hx_mx0) * 0.005, (mouse_y - hx_my0) * 0.005);
+      hx_mx0 = mouse_x; hx_my0 = mouse_y;
+    ) : ( hx_drag = 0; );
+  );
+  // continuous orbit (time-based, so it never speeds up or stalls): it keeps running while you click, drag, zoom or reset.
+  // Drag/zoom/reset only change the view; the orbit just carries on from wherever the view is. Only the pause button stops it.
+  hx_paused == 0 ? ( hx_rotate(-0.016 * hx_speed * hx_dt, 0); );
+
+  gfx_dest = 1; hx_render(hx_pw, hx_ph); gfx_dest = -1;
+  gfx_a = 1; gfx_mode = 0;
+  gfx_blit(1, 1, 0, 0, 0, hx_pw, hx_ph, floor(HXx * usx), floor(HXy * usy));
+
+  hx_full ? (
+    hx_bar ? (
+      gfx_set(0.07, 0.08, 0.10, 0.88); fr(0, 0, LW, 36);
+      lx = 20;
+      lx += hx_leg(lx, 8, 0.95, 0.71, 0.42, "root");
+      lx += hx_leg(lx, 8, 0.36, 0.55, 0.72, "scale");
+      lx += hx_leg(lx, 8, 0.72, 0.36, 0.36, "degree");
+      lx += hx_leg(lx, 8, 0.85, 0.56, 0.28, "chord");
+      hx_controls(LW - 10 - 308, 6);
+    );
+    while ((hx_key = gfx_getchar()) > 0) ( (hx_key == 27) ? ( hx_full = 0; ); );   // Esc returns to the plugin
+  ) : (
+    // column: controls on the INPUT bar row (left edge aligned with the square); legend inside the square, top-left
+    hx_controls(HXx, 6);
+    lg_w = 104 + tw_("root", 3) + tw_("scale", 3) + tw_("degree", 3) + tw_("chord", 3);   // 4 entries x (16 + 10) + text widths
+    gfx_set(0.07, 0.08, 0.10, 0.6); fr(HXx + 6, HXy + 6, lg_w - 2, 22);
+    lx = HXx + 10; ly_ = HXy + 6;
+    lx += hx_leg(lx, ly_, 0.95, 0.71, 0.42, "root");
+    lx += hx_leg(lx, ly_, 0.36, 0.55, 0.72, "scale");
+    lx += hx_leg(lx, ly_, 0.72, 0.36, 0.36, "degree");
+    lx += hx_leg(lx, ly_, 0.85, 0.56, 0.28, "chord");
+  );
+);
+
+
+// ===== plugin page (skipped while the helix is shown full-window) =====
+hx_full == 0 ? (
+
+// ---------------- input bar ----------------
+gfx_set(0.60, 0.62, 0.67, 1); ft(10, 9, "INPUT", 1);
+lx = 10 + tw_("INPUT", 1) + 10;
+lx += sopt(lx, 6, 22, "Root", S_INMODE, 0);
+lx += sopt(lx, 6, 22, "Degree", S_INMODE, 1);
+lx += sopt(lx, 6, 22, "Auto", S_INMODE, 3);
+lx += sopt(lx, 6, 22, "Direct", S_INMODE, 2);
+in_mode == 3 ? (
+  lx += 6;
+  lx += sopt(lx, 6, 22, "Modal Interchange", S_SUB, 0);
+  lx += sopt(lx, 6, 22, "Transposition", S_SUB, 1);
+  lx += sopt(lx, 6, 22, "Adaptive", S_SUB, 2);
+  lx += 4;
+  gfx_set(0.60, 0.62, 0.67, 1); ft(lx, 9, "dist from", 1); lx += tw_("dist from", 1) + 6;
+  lx += sopt(lx, 6, 22, "Original", 34, 0);
+  lx += sopt(lx, 6, 22, "Current", 34, 1);
+  lx += stog(lx, 6, 22, "Autoreset", 35);
+  lx += sbtn(lx, 6, 22, "Reset", 0);
+  sb_hit ? ( act = 1; );
+);
+oc_x = max(lx + 8, LW - 10 - 84 - 8 - tw_("Out ch", 1));
+gfx_set(0.60, 0.62, 0.67, 1); ft(oc_x, 9, "Out ch", 1);
+stepper(oc_x + tw_("Out ch", 1) + 8, 6, 84, 0, "", 36, 0, 16, 2, 0);
 
 // ---------------- header ----------------
 scale_title(#sc_title);
@@ -1950,15 +2491,15 @@ sc_n > 0 ? (
       nn_name(ab_root, #hf);
       ab_lib >= 0 ? ( lib_name(ab_lib, #tn4); strcat(#hf, "  "); strcat(#hf, #tn4); );
       strcpy(#hb, "from "); strcat(#hb, #hf);
-      gfx_set(0.93, 0.62, 0.28, 1); fit_head(#hb, 430, 3); ft(48, 36, #hb, 3);
+      gfx_set(0.93, 0.62, 0.28, 1); fit_head(#hb, 470, 3); ft(56, 36, #hb, 3);
     );
   ) : ( strcat(#hs, "  "); strcat(#hs, #sc_title); );
 ) : strcpy(#hs, #sc_title);
-gfx_set(0.55, 0.78, 0.95, 1); fit_head(#hs, 480, 2); ft(10, 48, #hs, 2);
-gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hp, #sc_pos); strcpy(#hp2, "positions: "); strcat(#hp2, #hp); strcat(#hp2, "   notes: "); strcat(#hp2, #sc_names); fit_head(#hp2, 480, 1); ft(10, 76, #hp2, 1);
-gfx_set(0.45, 0.47, 0.52, 1); ft(510, 36, "CHORD", 3);
-gfx_set(0.93, 0.62, 0.28, 1); strcpy(#hc, #cn); cm_n == 0 ? strcpy(#hc, "-"); fit_head(#hc, 490, 2); ft(510, 48, #hc, 2);
-gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hq, "steps: "); strcat(#hq, #cp); fit_head(#hq, 490, 1); ft(510, 76, #hq, 1);
+gfx_set(0.55, 0.78, 0.95, 1); fit_head(#hs, 530, 2); ft(10, 49, #hs, 2);
+gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hp, #sc_pos); strcpy(#hp2, "positions: "); strcat(#hp2, #hp); strcat(#hp2, "   notes: "); strcat(#hp2, #sc_names); fit_head(#hp2, 530, 1); ft(10, 80, #hp2, 1);
+gfx_set(0.45, 0.47, 0.52, 1); ft(562, 36, "CHORD", 3);
+gfx_set(0.93, 0.62, 0.28, 1); strcpy(#hc, #cn); cm_n == 0 ? strcpy(#hc, "-"); fit_head(#hc, 520, 2); ft(562, 49, #hc, 2);
+gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hq, "steps: "); strcat(#hq, #cp); fit_head(#hq, 520, 1); ft(562, 80, #hq, 1);
 in_mode == 0 ? strcpy(#ml, "Root: each held key sets its own root and plays its chord in the key's octave (polyphonic)");
 in_mode == 1 ? strcpy(#ml, "Degree: each held white key plays the chord of its degree (polyphonic, 0-127)");
 in_mode == 2 ? strcpy(#ml, "Direct: polyphonic pass-through");
@@ -1967,36 +2508,45 @@ in_mode == 3 ? (
   auto_sub == 1 ? sprintf(#ml, "Auto / Transposition: transposition %d", auto_mod_t < 0 ? 0 : auto_mod_t) :
                   strcpy(#ml, adapt_on ? "Auto / Adaptive: scale adapted to the played notes" : "Auto / Adaptive: scale not adapted yet");
 );
-gfx_set(0.45, 0.47, 0.52, 1); ft(10, 94, #ml, 3);
-gfx_set(0.60, 0.62, 0.67, 1); ft(690, 92, "Common notes", 1);
-opt(776, 90, 62, 16, "Hold", 38, 0);
-opt(840, 90, 74, 16, "Retrigger", 38, 1);
-gfx_set(0.60, 0.62, 0.67, 1); ft(486, 92, "Names", 1);
-opt(528, 90, 44, 16, "Auto", 39, 0);
-opt(574, 90, 52, 16, "Sharps", 39, 1);
-opt(628, 90, 44, 16, "Flats", 39, 2);
+gfx_set(0.45, 0.47, 0.52, 1); fit_head(#ml, LW - 20, 3); ft(10, 100, #ml, 3);
 
-draw_kbd(10, 110, 990, 52);
+// options row
+gfx_set(0.60, 0.62, 0.67, 1); ft(10, 122, "Names", 1); lx = 10 + tw_("Names", 1) + 8;
+lx += sopt(lx, 118, 22, "Auto", 39, 0);
+lx += sopt(lx, 118, 22, "Sharps", 39, 1);
+lx += sopt(lx, 118, 22, "Flats", 39, 2);
+lx += 24;
+gfx_set(0.60, 0.62, 0.67, 1); ft(lx, 122, "Common notes", 1); lx += tw_("Common notes", 1) + 8;
+lx += sopt(lx, 118, 22, "Hold", 38, 0);
+lx += sopt(lx, 118, 22, "Retrigger", 38, 1);
+hxb_w = tw_("Visualizer", 1) + 16;
+btn(LW - 10 - hxb_w, 118, hxb_w, 22, "Visualizer", hx_show, 1) ? ( hx_show = 1 - hx_show; );
 
-// ---------------- panels ----------------
-PY = 170; PH = 354; PW = 240;
-section(10, PY, PW, PH, "1", "SCALE");
-section(260, PY, PW, PH, "2", "SCALE TRANSFORM");
-section(510, PY, PW, PH, "3", "CHORD");
-section(760, PY, PW, PH, "4", "CHORD TRANSFORM");
+draw_kbd(10, 146, 1080, 52);
+
+// ---------------- panels (laid out with y measured from 170; shifted down by 36 into place) ----------------
+oy = 36 * usy; my = mouse_y / usy - 36;
+PY = 170; PH = 360;
+section(10, PY, 262, PH, "1", "SCALE");
+section(282, PY, 262, PH, "2", "SCALE TRANSFORM");
+section(554, PY, 262, PH, "3", "CHORD");
+section(826, PY, 262, PH, "4", "CHORD TRANSFORM");
 
 // ----- 1 SCALE -----
-x = 18; w = 224;
-opt(x, 196, 43, 20, "Library", 1, 0);
-opt(x + 45, 196, 43, 20, "Euclid", 1, 1);
-opt(x + 90, 196, 43, 20, "C-D", 1, 2);
-opt(x + 135, 196, 43, 20, "Deep", 1, 3);
-opt(x + 180, 196, 44, 20, "Custom", 1, 4);
+x = 18; w = 246;
+q1 = tw_("Library", 1); q2 = tw_("Euclid", 1); q3 = tw_("C-D", 1); q4 = tw_("Deep", 1); q5 = tw_("Custom", 1);
+kk = (w - 12) / (q1 + q2 + q3 + q4 + q5);
+bx_ = x;
+opt(bx_, 196, q1 * kk, 22, "Library", 1, 0); bx_ += q1 * kk + 3;
+opt(bx_, 196, q2 * kk, 22, "Euclid", 1, 1);  bx_ += q2 * kk + 3;
+opt(bx_, 196, q3 * kk, 22, "C-D", 1, 2);     bx_ += q3 * kk + 3;
+opt(bx_, 196, q4 * kk, 22, "Deep", 1, 3);    bx_ += q4 * kk + 3;
+opt(bx_, 196, q5 * kk, 22, "Custom", 1, 4);
 sc_src == 0 ? (
   // category selector
-  btn(x, 222, 22, 20, "<", 0, 1) ? ( set_sl_ui(2, max(0, sc_cat - 1)); strlen(#filter) == 0 ? ( flt_dirty = 1; ); );
-  btn(x + w - 22, 222, 22, 20, ">", 0, 1) ? ( set_sl_ui(2, min(8, sc_cat + 1)); strlen(#filter) == 0 ? ( flt_dirty = 1; ); );
-  gfx_set(0.18, 0.20, 0.25, 1); fr(x + 24, 222, w - 48, 20);
+  btn(x, 224, 24, 22, "<", 0, 1) ? ( set_sl_ui(2, max(0, sc_cat - 1)); strlen(#filter) == 0 ? ( flt_dirty = 1; ); );
+  btn(x + w - 24, 224, 24, 22, ">", 0, 1) ? ( set_sl_ui(2, min(8, sc_cat + 1)); strlen(#filter) == 0 ? ( flt_dirty = 1; ); );
+  gfx_set(0.18, 0.20, 0.25, 1); fr(x + 26, 224, w - 52, 22);
   gfx_set(0.95, 0.94, 0.90, 1);
   strlen(#filter) == 0 ? ( c = floor(sc_cat + 0.5); strcpy(#cat_s, "Category"); ) : strcpy(#cat_s, "All categories");
   strlen(#filter) == 0 ? (
@@ -2005,16 +2555,16 @@ sc_src == 0 ? (
     c == 3 ? strcpy(#cat_s, "Indian"); c == 4 ? strcpy(#cat_s, "Pentatonic"); c == 5 ? strcpy(#cat_s, "Modal");
     c == 6 ? strcpy(#cat_s, "Jazz"); c == 7 ? strcpy(#cat_s, "Symmetric"); c == 8 ? strcpy(#cat_s, "Misc");
   );
-  ftc(x + 24, 222, w - 48, 20, #cat_s, 1);
+  ftc(x + 26, 224, w - 52, 22, #cat_s, 1);
   // search field
   strcpy(#tfshow, #filter); strlen(#filter) == 0 ? strcpy(#tfshow, "search...");
   tf_id == 4 ? strcpy(#tfshow, #filter);
-  tf_run(4, x, 248, w - 22, 20, 1);
+  tf_run(4, x, 252, w - 26, 22, 1);
   tf_id == 4 ? ( strcmp(#filter, #tfbuf) != 0 ? ( strcpy(#filter, #tfbuf); flt_dirty = 1; ); );
-  btn(x + w - 20, 248, 20, 20, "x", 0, 1) ? ( strcpy(#filter, ""); strcpy(#tfbuf, ""); flt_dirty = 1; tf_id == 4 ? ( tf_id = 0; ); );
+  btn(x + w - 22, 252, 22, 22, "x", 0, 1) ? ( strcpy(#filter, ""); strcpy(#tfbuf, ""); flt_dirty = 1; tf_id == 4 ? ( tf_id = 0; ); );
   flt_dirty ? flt_build();
   // list
-  ly = 274; lh = 17;
+  ly = 280; lh = 19;
   lst_off = max(0, min(lst_off, max(0, flt_n - LST_VIS)));
   hit(x, ly, w, lh * LST_VIS) && wheel != 0 ? ( lst_off = max(0, min(flt_n - LST_VIS, lst_off - (wheel > 0 ? 3 : -3))); wheel = 0; );
   cur_lib = M_CATS[floor(sc_cat + 0.5)] + min(floor(sc_idx + 0.5), M_CATN[floor(sc_cat + 0.5)] - 1);
@@ -2027,7 +2577,7 @@ sc_src == 0 ? (
       hv = hit(x, ly + r * lh, w - 9, lh);
       (sc_src == 0 && gi == cur_lib) ? ( gfx_set(0.93, 0.62, 0.28, 1); fr(x, ly + r * lh, w - 9, lh); gfx_set(0.08, 0.09, 0.11, 1); ) :
       ( hv ? ( gfx_set(0.20, 0.23, 0.29, 1); fr(x, ly + r * lh, w - 9, lh); ); gfx_set(0.85, 0.85, 0.82, 1); );
-      lib_name(gi, #ln); fit_head(#ln, w - 18, 1); ft(x + 4, ly + r * lh + 2, #ln, 1);
+      lib_name(gi, #ln); fit_head(#ln, w - 18, 1); ft(x + 4, ly + r * lh + 1, #ln, 1);
       (hv && mclick) ? (
         cc = lib_cat_of(gi);
         set_sl_ui(2, cc); set_sl_ui(3, gi - M_CATS[cc]); set_sl_ui(1, 0);
@@ -2047,98 +2597,105 @@ sc_src == 0 ? (
   gfx_set(0.45, 0.47, 0.52, 1);
   sprintf(#cnt_s, "%d scales", flt_n); ft(x, ly + lh * LST_VIS + 3, #cnt_s, 3);
 ) : sc_src == 4 ? (
-  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 224, "Positions (integers, mod 12)", 1);
+  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 226, "Positions (integers, mod 12)", 1);
   list_str(1, #tfshow);
-  tf_run(1, x, 242, w, 22, 0) ? (
+  tf_run(1, x, 246, w, 22, 0) ? (
     n = parse_list(#tfbuf, G_TMP, 0);
     i = 0; loop(n, A_SCP[i] = G_TMP[i]; i += 1;);
     list_set_len(1, n);
   );
-  gfx_set(0.45, 0.47, 0.52, 1); ft(x, 270, "Type a list and press Enter, or use the", 3); ft(x, 282, "pitch-class cells below.", 3);
+  gfx_set(0.45, 0.47, 0.52, 1); ft(x, 278, "Type a list and press Enter, or use the", 3); ft(x, 292, "pitch-class cells below.", 3);
 ) : (
-  sc_src == 3 ? ( stepper(x, 224, w, 100, "Events", 4, 1, 12, 0, 7); stepper(x, 250, w, 100, "Multiplicity", 5, 1, 23, 0, 7); ) :
-                ( stepper(x, 224, w, 100, "Events", 4, 1, 12, 0, 7); );
+  sc_src == 3 ? ( stepper(x, 226, w, 110, "Events", 4, 1, 12, 0, 7); stepper(x, 254, w, 110, "Multiplicity", 5, 1, 23, 0, 7); ) :
+                ( stepper(x, 226, w, 110, "Events", 4, 1, 12, 0, 7); );
   gfx_set(0.45, 0.47, 0.52, 1);
-  sc_src == 1 ? ( ft(x, 258, "Euclidean rhythm spread over 12 steps", 3); ) :
-  sc_src == 2 ? ( ft(x, 258, "Clough-Douthett maximally even set", 3); ) :
-                ( ft(x, 284, "Deep rhythm: i * multiplicity mod 12", 3); );
+  sc_src == 1 ? ( ft(x, 260, "Euclidean rhythm spread over 12 steps", 3); ) :
+  sc_src == 2 ? ( ft(x, 260, "Clough-Douthett maximally even set", 3); ) :
+                ( ft(x, 288, "Deep rhythm: i * multiplicity mod 12", 3); );
 );
 // base pitch-class set (before transforms)
-gfx_set(0.60, 0.62, 0.67, 1); ft(x, 484, "base scale", 3);
+gfx_set(0.60, 0.62, 0.67, 1); ft(x, 490, "base scale", 3);
 bm = src_mask();
 sc_src == 4 ? (
-  pk = pc_row(x, 498, bm, 1, 0);
+  pk = pc_row(x, 506, bm, 1, 0);
   pk >= 0 ? (
     bm = bm + (bitv(bm, pk) ? -(2^pk) : 2^pk);
     n = 0; i = 0; loop(12, bitv(bm, i) ? ( A_SCP[n] = i; n += 1; ); i += 1;);
     list_set_len(1, n);
   );
-) : ( pc_row(x, 498, bm, 0, 0); );
+) : ( pc_row(x, 506, bm, 0, 0); );
 
 // ----- 2 SCALE TRANSFORM -----
-x = 268; w = 224;
+x = 290; w = 246;
 stepper(x, 196, w, 90, "Root", 6, 0, 11, 1, 0);
-stepper(x, 222, w, 90, "Mode", 7, 0, 11, 0, 0);
-stepper(x, 248, w, 90, "Degree", 8, -12, 12, 0, 0);
-tog(x, 274, 70, 20, "Invert", 9);
-stepper(x + 76, 274, w - 76, 40, "axis", 10, -12, 12, 0, 0);
-tog(x, 300, 107, 20, "Mirror", 11);
-tog(x + 117, 300, 107, 20, "Negative", 12);
+stepper(x, 224, w, 90, "Mode", 7, 0, 11, 0, 0);
+stepper(x, 252, w, 90, "Degree", 8, -12, 12, 0, 0);
+tog(x, 280, 70, 22, "Invert", 9);
+stepper(x + 76, 280, w - 76, 40, "axis", 10, -12, 12, 0, 0);
+tog(x, 308, 118, 22, "Mirror", 11);
+tog(x + 128, 308, 118, 22, "Negative", 12);
 gfx_set(0.45, 0.47, 0.52, 1);
-ft(x, 328, "drag, scroll, click left/right, right-click to reset", 3);
-pc_row(x, 364, scale_pcm, 0, 1);
-sprintf(#t2, "%d notes", sc_n); ft(x, 390, #t2, 3);
+ft(x, 340, "drag, scroll, click left/right,", 3);
+ft(x, 354, "right-click to reset", 3);
+pc_row(x, 380, scale_pcm, 0, 1);
+sprintf(#t2, "%d notes", sc_n); ft(x, 406, #t2, 3);
+btn(x, 432, w, 24, "Scale Analysis", an_open, 1) ? ( an_open = 1 - an_open; );
 
 // ----- 3 CHORD -----
-x = 518; w = 224;
+x = 562; w = 246;
 stepper(x, 196, w, 90, "Octave", 13, 0, 9, 0, 4);
-gfx_set(0.60, 0.62, 0.67, 1); ft(x, 226, "Criterion", 1);
-opt(x + 70, 222, 76, 20, "Position", 14, 0);
-opt(x + 148, 222, 76, 20, "Interval", 14, 1);
+gfx_set(0.60, 0.62, 0.67, 1); ft(x, 230, "Criterion", 1);
+opt(x + 74, 226, 82, 22, "Position", 14, 0);
+opt(x + 160, 226, 86, 22, "Interval", 14, 1);
 cr_type == 0 ? (
-  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 248, "Degrees (integers >= 0)", 1);
+  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 258, "Degrees (integers >= 0)", 1);
   list_str(2, #tfshow);
-  tf_run(2, x, 266, w, 22, 0) ? (
+  tf_run(2, x, 278, w, 22, 0) ? (
     n = parse_list(#tfbuf, G_TMP, 1);
     i = 0; loop(n, A_CRP[i] = G_TMP[i]; i += 1;);
     list_set_len(2, n);
   );
-  chips(x, 294, 2, 0);
+  chips(x, 306, 2, 0);
 ) : (
-  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 248, "Interval steps (any integers)", 1);
+  gfx_set(0.60, 0.62, 0.67, 1); ft(x, 258, "Interval steps (any integers)", 1);
   list_str(3, #tfshow);
-  tf_run(3, x, 266, w, 22, 0) ? (
+  tf_run(3, x, 278, w, 22, 0) ? (
     n = parse_list(#tfbuf, G_TMP, 0);
     i = 0; loop(n, A_CRI[i] = G_TMP[i]; i += 1;);
     list_set_len(3, n);
   );
-  chips(x, 294, 3, -1000);
+  chips(x, 306, 3, -1000);
 );
-stepper(x, 382, w, 90, "Degree", 15, -72, 80, 0, 0);
-stepper(x, 408, w, 90, "Rotation", 16, -12, 12, 0, 0);
-stepper(x, 434, w, 90, "Voices (0=all)", 17, 0, 32, 0, 0);
+stepper(x, 418, w, 116, "Degree", 15, -72, 80, 0, 0);
+stepper(x, 446, w, 116, "Rotation", 16, -12, 12, 0, 0);
+stepper(x, 474, w, 116, "Voices (0=all)", 17, 0, 32, 0, 0);
 
 // ----- 4 CHORD TRANSFORM -----
-x = 768; w = 224;
-stepper(x, 196, w, 90, "Position", 18, -12, 12, 0, 0);
-stepper(x, 222, w, 90, "Offset", 19, -24, 24, 0, 0);
-stepper(x, 248, w, 90, "Mode", 20, 0, 11, 0, 0);
-tog(x, 274, 70, 20, "Invert", 21);
-stepper(x + 76, 274, w - 76, 40, "axis", 22, -12, 12, 0, 0);
-tog(x, 300, 107, 20, "Mirror", 23);
-tog(x + 117, 300, 107, 20, "Negative", 24);
-tog(x, 326, 107, 20, "Close", 25);
-tog(x + 117, 326, 107, 20, "Spread", 26);
-stepper(x, 352, w, 90, "Spread Octaves", 27, 1, 8, 0, 2);
-tog(x, 378, 70, 20, "Resize", 28);
-stepper(x + 76, 378, 72, 12, "s", 29, -24, 24, 0, 0);
-stepper(x + 152, 378, 72, 12, "e", 30, -24, 24, 0, 3);
-tog(x, 410, 107, 20, "Auto-voicing", 31);
-btn(x + 117, 410, 107, 20, "Reset", 0, 1) ? ( act = 2; );
+x = 834; w = 246;
+stepper(x, 196, w, 100, "Position", 18, -12, 12, 0, 0);
+stepper(x, 224, w, 100, "Offset", 19, -24, 24, 0, 0);
+stepper(x, 252, w, 100, "Mode", 20, 0, 11, 0, 0);
+tog(x, 280, 70, 22, "Invert", 21);
+stepper(x + 76, 280, w - 76, 40, "axis", 22, -12, 12, 0, 0);
+tog(x, 308, 118, 22, "Mirror", 23);
+tog(x + 128, 308, 118, 22, "Negative", 24);
+tog(x, 336, 118, 22, "Close", 25);
+tog(x + 128, 336, 118, 22, "Spread", 26);
+stepper(x, 364, w, 116, "Spread Octaves", 27, 1, 8, 0, 2);
+tog(x, 392, 70, 22, "Resize", 28);
+stepper(x + 76, 392, 82, 14, "s", 29, -24, 24, 0, 0);
+stepper(x + 164, 392, 82, 14, "e", 30, -24, 24, 0, 3);
+tog(x, 424, 118, 22, "Auto-voicing", 31);
+btn(x + 128, 424, 118, 22, "Reset", 0, 1) ? ( act = 2; );
+
+// ----- scale analysis card (below the panels, toggled from the Scale transform panel) -----
+oy = 46 * usy; my = mouse_y / usy - 46;
+an_open ? ( an_draw(); );
+oy = 0; my = mouse_y / usy;
+);   // end of plugin page
 
 // text field housekeeping
 tf_seen == 0 ? ( tf_id = 0; );
 last_cap = mouse_cap;
-
 
 

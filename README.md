@@ -8,7 +8,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 
 | Effect | File | Type | What it does |
 | --- | --- | --- | --- |
-| Harmony | `Harmony.jsfx` | MIDI | Scale and chord engine: turns single notes into chords built from a transformable scale |
+| Harmony | `Harmony.jsfx` | MIDI | Scale and chord engine: turns single notes into chords built from a transformable scale, with a scale analysis card and a 3D helix visualizer |
 | Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
 | ADT Double Tracker | `ADT Double Tracker.jsfx` | Audio | Artificial double tracking: a varispeed-delayed second take with separate pan, drive and level per path |
 | Boss CE-1 Chorus Ensemble | `Boss CE-1 Chorus Ensemble.jsfx` | Audio | BBD-style chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble |
@@ -23,7 +23,7 @@ A MIDI scale and chord engine. Each note you play is expanded into a chord that 
 
 Unlike Block Chords, which harmonizes a melody, Harmony treats each key as a command. Depending on the **Input** mode, the key sets the root, picks a scale degree, or lets the plugin work out which scale you are playing in.
 
-The effect has its own editor that scales to fit the window. A keyboard strip above the panels shows the live scale (blue), the current chord (orange) and the keys you are holding. Note names are spelled to fit the scale, with the right flats or sharps (see Note names below).
+The effect has its own editor that scales to fit the window, with a 3D helix visualizer and a scale analysis card (see below). A keyboard strip above the panels shows the live scale (blue), the current chord (orange) and the keys you are holding. Note names are spelled to fit the scale, with the right flats or sharps (see Note names below).
 
 ### How it works
 
@@ -103,6 +103,40 @@ Notes outside the scale, such as chord tones, use the same sharp or flat directi
 **Spread** keeps the lowest note and gives every other note (keeping its pitch class) the octave that brings the gaps between neighbouring notes closest to a target profile: about 9 semitones for the first gap, then 7.8, 6.8 and so on, narrowing towards 3 at the top. Gaps smaller than a minor third are penalised. **Spread Octaves** (1 to 8, default 2) sets the range of the voicing, 12 semitones per octave. The plugin starts from a profile that just fills that range and tightens it step by step until the chord fits, so a triad stretches over several octaves when you ask for it. At 1 the result is the closed voicing, with the notes in ascending pitch-class order above the bass. Spread works on chords of up to 16 notes (an exact search up to 11 upper notes, a greedy one beyond).
 
 Auto-voicing remembers the previous chord. The **Reset** button next to it forgets it, so the next chord is voiced from scratch.
+
+### Editor size and layout
+
+The editor opens at 1500 x 826 and scales evenly to fit the window. The space for the Scale Analysis card is always reserved at the bottom, so showing or hiding it changes nothing else. If the window is smaller than the design, everything scales down together. REAPER remembers window sizes, so drag an existing instance taller once (about 826 pixels at the default width).
+
+### Visualizer
+
+The helix to the right of the panels (the **Visualizer** button in the header turns it on and off) shows 120 notes, 10 octaves of 12 pitch classes, on a helix with one ring per octave. The colours match the legend in its top-left corner:
+
+- **root** (light orange), **scale** (blue), **degree** (red, the scale degree the chord is built from) and **chord** (orange, joined by a line from the lowest to the highest note). Other notes stay dim.
+- With Chord **Negative** on, it shows the reflected scale the chord is picked from.
+
+Drag to rotate and scroll to zoom. The controls above the view are **Expand** (the helix fills the whole window, and the control bar appears when the mouse is over the top strip. **Back** or Esc returns), play/pause, **speed** (0.25x to 4x) and **Reset** (back to the default view and zoom). The helix turns all the time at a steady, clock-based speed (about 1 degree per second at 1.00x). Dragging, zooming, clicking and resetting never pause it, and only the pause button stops it. The square's bottom edge lines up with the bottom of the panels.
+
+### Scale Analysis
+
+The **Scale Analysis** button in the Scale Transform panel opens a card at the bottom of the editor. It analyses the scale with only Mode, Mirror and Negative applied (Root, Degree and Invert only move or rotate the scale without changing its intervals), with the lowest pitch class at 0. It needs at least two notes.
+
+The top row shows the scale in four notations. For C major:
+
+| Notation | Shows | Example |
+| --- | --- | --- |
+| Positions | The notes as semitones above the lowest one | `0 2 4 5 7 9 11` |
+| Intervals | The inter-onset intervals, step to step (the last one wraps to the octave) | `2 2 1 2 2 2 1` |
+| Onsets | The 12 pitch classes, 1 if the note is in the scale | `1 0 1 0 1 1 0 1 0 1 0 1` |
+| Bitmask | The onsets as a number, with bit *n* set for position *n* (the same number the library uses) | `2741` |
+
+Below it, the card shows:
+
+- **Properties:** Euclidean, Winograd-deep, Erdos-deep, Palindrome, Balanced and Chiral.
+- **Distances:** how many times each distance (1 to 6 semitones) occurs, plus regression evenness and rhythmic oddity.
+- **Binary string:** Shannon entropy, transition complexity and longest run of the onsets.
+- **Symmetry:** rotational and reflective axes. **Generation:** the generator *m* that builds the scale, if there is one.
+- **Distribution spectra:** for each number of steps, the interval sizes it spans, its width *w* (0 is strict, 1 is Myhill) and the mean width.
 
 ### Input modes
 
