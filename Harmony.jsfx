@@ -1940,6 +1940,9 @@ HX_CS = HX_N + 1152; HX_SN = HX_N + 1216;                    // unit-circle cos 
 HX_CL = HX_N + 1280;                                         // chord sphere indices (sorted)
 HX_PCF = HX_N + 1400;                                        // pitch-class-in-scale flags (12)
 HX_NP = 120; HX_SEG = 48; HX_RR = 5; HX_LH = 0.85; HX_OCT = 10;
+HX_RX = HX_N + 1500; HX_RY = HX_N + 1560; HX_RD = HX_N + 1620;   // projected ring vertices (48 each)
+HX_SPD = 0.016;        // orbit speed in rad/s at 1.00x (about 0.9 deg/s)
+HX_SSMAX = 8400000;    // supersample the helix 2x while the 2x image has at most this many pixels (lower it if the GUI feels heavy)
 
 function hx_reset_view() local(az, el) (
   az = 15 * $pi / 180; el = 22 * $pi / 180;
@@ -1999,7 +2002,19 @@ function hx_col(st, fade) (
   (st & 1) ? gfx_set(0.36, 0.55, 0.72, fade) :
              gfx_set(0.20, 0.23, 0.29, fade);
 );
-function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp, a, b, lo, hi, anc, q, sh, found, v, same) (
+// Thin lines / outlines are drawn hx_ss times side by side so that, after the supersampled image is scaled down, they keep their 1 px weight.
+function hx_ln(x1, y1, x2, y2) local(k, horiz) (
+  horiz = abs(x2 - x1) >= abs(y2 - y1); k = -(hx_ss - 1) * 0.5;
+  loop(hx_ss,
+    horiz ? ( gfx_line(x1, y1 + k, x2, y2 + k, 1); ) : ( gfx_line(x1 + k, y1, x2 + k, y2, 1); );
+    k += 1;
+  );
+);
+function hx_halo(x, y, r) local(k) (
+  k = -(hx_ss - 1) * 0.5;
+  loop(hx_ss, gfx_circle(x, y, r + k, 0, 1); k += 1;);
+);
+function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp, a, b, lo, hi, anc, q, sh, found, v, same, c0, s0) (
   hx_cx = w / 2; hx_cy = h / 2; hx_f = (h / 2) / tan(25 * $pi / 180);    // 50 deg vertical FOV
   gfx_set(0.105, 0.12, 0.145, 1); gfx_rect(0, 0, w, h);
 
@@ -2036,7 +2051,7 @@ function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp
     HX_SX[i] = hx_qx; HX_SY[i] = hx_qy; HX_SD[i] = hx_qd;
     st = HX_ST[i];
     r = (st & 8) ? 1.6 : (st & 4) ? 1.55 : (st & 2) ? 1.5 : 1;
-    HX_SR[i] = max(1.2, 0.11 * r * hx_f / max(0.1, hx_qd));
+    HX_SR[i] = max(1.2 * hx_ss, 0.11 * r * hx_f / max(0.1, hx_qd));
     HX_OR[i] = i;
     i += 1;
   );
@@ -2050,15 +2065,22 @@ function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp
   );
 
   // ---- octave ring guides ----
+  // The rings are rotation-invariant, so their polygon corners are placed relative to the camera azimuth: during the orbit the
+  // outline then stays still on screen instead of its 48 corners crawling around the true circle.
   gfx_set(0.95, 0.94, 0.91, 0.10);
+  c0 = atan2(hx_exz, hx_exx); s0 = sin(c0); c0 = cos(c0);
   layer = 0;
   loop(HX_OCT + 1,
     k = 0;
     loop(HX_SEG,
-      hx_proj(HX_RR * HX_CS[k], layer * HX_LH, HX_RR * HX_SN[k]); a = hx_qx; b = hx_qy; lo = hx_qd;
+      hx_proj(HX_RR * (HX_CS[k] * c0 - HX_SN[k] * s0), layer * HX_LH, HX_RR * (HX_SN[k] * c0 + HX_CS[k] * s0));
+      HX_RX[k] = hx_qx; HX_RY[k] = hx_qy; HX_RD[k] = hx_qd;
+      k += 1;
+    );
+    k = 0;
+    loop(HX_SEG,
       j = k + 1 >= HX_SEG ? 0 : k + 1;
-      hx_proj(HX_RR * HX_CS[j], layer * HX_LH, HX_RR * HX_SN[j]);
-      (lo > 0.1 && hx_qd > 0.1) ? gfx_line(a, b, hx_qx, hx_qy, 1);
+      (HX_RD[k] > 0.1 && HX_RD[j] > 0.1) ? hx_ln(HX_RX[k], HX_RY[k], HX_RX[j], HX_RY[j]);
       k += 1;
     );
     layer += 1;
@@ -2073,7 +2095,7 @@ function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp
       fade = max(0.35, min(1, 1.15 - (HX_SD[n] - (hx_dist - 6)) / 24));
       hx_col(st, st ? 1 : fade);
       gfx_circle(HX_SX[n], HX_SY[n], HX_SR[n], 1, 1);
-      st >= 2 ? ( hx_col(st, 0.25); gfx_circle(HX_SX[n], HX_SY[n], HX_SR[n] * 1.6, 0, 1); );   // soft halo on the important notes
+      st >= 2 ? ( hx_col(st, 0.25); hx_halo(HX_SX[n], HX_SY[n], HX_SR[n] * 1.6); );   // soft halo on the important notes
     );
     i += 1;
   );
@@ -2086,7 +2108,7 @@ function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp
     i = 0;
     loop(same ? ccnt : ccnt - 1,
       a = HX_CL[i]; b = HX_CL[i + 1 >= ccnt ? 0 : i + 1];
-      (HX_SD[a] > 0.1 && HX_SD[b] > 0.1) ? gfx_line(HX_SX[a], HX_SY[a], HX_SX[b], HX_SY[b], 1);
+      (HX_SD[a] > 0.1 && HX_SD[b] > 0.1) ? hx_ln(HX_SX[a], HX_SY[a], HX_SX[b], HX_SY[b]);
       i += 1;
     );
     // redraw the chord spheres on top so the polygon never covers them
@@ -2398,17 +2420,21 @@ gfx_a = 1;
 
 // ---------------- 3D helix card (a square to the right of the panels, or the whole window when expanded) ----------------
 hx_init == 0 ? (
-  hx_init = 1; hx_paused = 0; hx_speed = 1; hx_drag = 0;
+  hx_init = 1; hx_paused = 0; hx_speed = 1; hx_drag = 0; hx_dts = 0.033; hx_ss = 1;
   hx_last_t = time_precise(); hx_w = 0; hx_h = 0;
   hx_init_lattice(); hx_reset_view();
 );
 hx_vis = hx_full || hx_show;
 hx_vis ? (
   hx_pw = max(32, floor(HXw * usx)); hx_ph = max(32, floor(HXh * usy));
-  (hx_pw != hx_w || hx_ph != hx_h) ? ( gfx_setimgdim(1, hx_pw, hx_ph); hx_w = hx_pw; hx_h = hx_ph; );
+  // render at 2x and let the scaled blit average 2x2 pixels: sub-pixel accurate edges, so slow motion is smooth instead of stepping
+  hx_ss = (hx_pw * hx_ph * 4 <= HX_SSMAX) ? 2 : 1;
+  hx_iw = hx_pw * hx_ss; hx_ih = hx_ph * hx_ss;
+  (hx_iw != hx_w || hx_ih != hx_h) ? ( gfx_setimgdim(1, hx_iw, hx_ih); hx_w = hx_iw; hx_h = hx_ih; );
   hx_bar = hx_full && mouse_y >= 0 && my < 36;      // expanded: controls bar shows only while the mouse is over the top strip
   hx_hov = hit(HXx, HXy, HXw, HXh) && !hx_bar;
   hx_t = time_precise(); hx_dt = min(0.1, max(0, hx_t - hx_last_t)); hx_last_t = hx_t;
+  hx_dts += (hx_dt - hx_dts) * 0.2;     // low-passed frame time: the UI timer is irregular, the orbit step should not be
   (hx_hov && wheel != 0) ? ( hx_dist = max(3, min(70, hx_dist * (wheel > 0 ? 0.9 : 1.1))); wheel = 0; );
   (mclick && hx_hov) ? ( hx_drag = 1; hx_mx0 = mouse_x; hx_my0 = mouse_y; );
   hx_drag ? (
@@ -2419,11 +2445,11 @@ hx_vis ? (
   );
   // continuous orbit (time-based, so it never speeds up or stalls): it keeps running while you click, drag, zoom or reset.
   // Drag/zoom/reset only change the view; the orbit just carries on from wherever the view is. Only the pause button stops it.
-  hx_paused == 0 ? ( hx_rotate(-0.016 * hx_speed * hx_dt, 0); );
+  hx_paused == 0 ? ( hx_rotate(-HX_SPD * hx_speed * hx_dts, 0); );
 
-  gfx_dest = 1; hx_render(hx_pw, hx_ph); gfx_dest = -1;
+  gfx_dest = 1; hx_render(hx_iw, hx_ih); gfx_dest = -1;
   gfx_a = 1; gfx_mode = 0;
-  gfx_blit(1, 1, 0, 0, 0, hx_pw, hx_ph, floor(HXx * usx), floor(HXy * usy));
+  gfx_blit(1, 1, 0, 0, 0, hx_iw, hx_ih, floor(HXx * usx), floor(HXy * usy), hx_pw, hx_ph);
 
   hx_full ? (
     hx_bar ? (
