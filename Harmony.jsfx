@@ -685,18 +685,20 @@ function mask_to_pos(m, out) local(b, n, f) (
   n;
 );
 // iterative Euclidean (Bjorklund-style) interval generator for 12 steps
-function gen_euclid(ev, out) local(n, k, q, r, L, l, i, j, src, dst, slen, dlen, done, t) (
+// w = workspace base: Q at w, R at w+16, K at w+32, buffers at w+256 and w+512 (audio thread: w = A_ELQ, same addresses as before)
+function gen_euclid(ev, out, w) local(n, k, q, r, L, l, i, j, src, dst, slen, dlen, done, t, eq, er, ek) (
+  eq = w; er = w + 16; ek = w + 32;
   n = 12; k = ev; L = 0; done = 0;
   while (done == 0) (
     q = floor(n / k); r = n - q*k;
-    A_ELQ[L] = q; A_ELR[L] = r; A_ELK[L] = k;
+    eq[L] = q; er[L] = r; ek[L] = k;
     r == 0 ? ( done = 1; ) : ( n = k; k = r; L += 1; );
   );
-  src = A_EB1; dst = A_EB2;
-  slen = A_ELK[L]; i = 0; loop(slen, src[i] = A_ELQ[L]; i += 1;);
+  src = w + 256; dst = w + 512;
+  slen = ek[L]; i = 0; loop(slen, src[i] = eq[L]; i += 1;);
   l = L - 1;
   while (l >= 0) (
-    q = A_ELQ[l]; r = A_ELR[l];
+    q = eq[l]; r = er[l];
     dlen = 0; i = 0;
     loop(r,
       j = 0; loop(src[i] - 1, dst[dlen] = q; dlen += 1; j += 1;);
@@ -709,7 +711,8 @@ function gen_euclid(ev, out) local(n, k, q, r, L, l, i, j, src, dst, slen, dlen,
   i = 0; loop(slen, out[i] = src[i]; i += 1;);
   slen;
 );
-function src_mask() local(m, c, ix, i, p, cnt, ev) (
+// tbuf / w: scratch buffer and Euclid workspace owned by the caller (audio thread and GUI thread use different ones)
+function src_mask(tbuf, w) local(m, c, ix, i, p, cnt, ev) (
   m = 0;
   sc_src == 0 ? (
     c = floor(sc_cat + 0.5); ix = floor(sc_idx + 0.5);
@@ -717,9 +720,9 @@ function src_mask() local(m, c, ix, i, p, cnt, ev) (
     m = M_LIB[M_CATS[c] + ix];
   ) : sc_src == 1 ? (
     ev = min(12, max(1, floor(gen_ev + 0.5)));
-    cnt = gen_euclid(ev, A_TMP);
+    cnt = gen_euclid(ev, tbuf, w);
     p = 0; i = 0;
-    loop(cnt, m += 2^p; p += A_TMP[i]; i += 1;);
+    loop(cnt, m += 2^p; p += tbuf[i]; i += 1;);
   ) : sc_src == 2 ? (
     ev = min(12, max(1, floor(gen_ev + 0.5)));
     i = 0;
@@ -1264,7 +1267,7 @@ function adapt_find_root() local(i, pc, m, l, up, dn, key, bk, bl, bm, br) (
 );
 
 function rebuild_scale() local(m, i, c, ix) (
-  m = src_mask();
+  m = src_mask(A_TMP, A_ELQ);
   bn = mask_to_pos(m, A_BP);
   bn <= 0 ? ( sc_n = 0; ch_cnt = 0; cm_n = 0; ) : (
     sc_n = bn;
@@ -2120,6 +2123,7 @@ function hx_controls(cx, cy) (
 
 // =====================================================================
 //  SCALE ANALYSIS  (port of the HTML analysis panel)
+//  Computed from the editor sliders alone (never waits for the audio thread / incoming notes).
 //  Works on the scale with only Mode / Mirror / Negative applied (Root, Degree
 //  and Invert only move or rotate it without changing its interval content),
 //  normalised so the lowest pitch class is 0. Runs on the GUI thread with its
@@ -2129,12 +2133,15 @@ AN = 210000;
 AN_P = AN; AN_T = AN + 64; AN_IV = AN + 128; AN_IV2 = AN + 192; AN_OC = AN + 256;
 AN_BIN = AN + 272; AN_BM = AN + 288; AN_W = AN + 304; AN_RF = AN + 320; AN_RT = AN + 352;
 AN_SPF = AN + 512; AN_G = AN + 768;
+AN_TMP = AN + 900; AN_EW = AN + 1024;   // private scratch + Euclid workspace for src_mask (GUI thread only)
 
-function an_build() local(n, i, s0, sl, mn, axis, pc) (
-  n = bn; an_n = n;
+function an_build() local(n, i, s0, sl, mn, axis, pc, m) (
+  // base scale straight from the editor sliders (source / library / generator / custom list): does not depend on
+  // the audio thread having run rebuild_scale(), so the analysis is live as soon as the scale is selected or edited
+  m = src_mask(AN_TMP, AN_EW);
+  n = mask_to_pos(m, AN_P); an_n = n;
   n < 2 ? ( an_ok = 0; ) : (
     an_ok = 1;
-    copy_arr(AN_P, A_BP, n);
     (tx_mode != 0) ? (
       pos_to_iv(AN_P, n, AN_IV);
       i = 0; loop(n, AN_IV2[i] = AN_IV[pmod(tx_mode + i, n)]; i += 1;);
@@ -2615,7 +2622,7 @@ sc_src == 0 ? (
 );
 // base pitch-class set (before transforms)
 gfx_set(0.60, 0.62, 0.67, 1); ft(x, 490, "base scale", 3);
-bm = src_mask();
+bm = src_mask(AN_TMP, AN_EW);
 sc_src == 4 ? (
   pk = pc_row(x, 506, bm, 1, 0);
   pk >= 0 ? (
