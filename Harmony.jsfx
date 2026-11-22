@@ -2014,7 +2014,7 @@ function hx_halo(x, y, r) local(k) (
   k = -(hx_ss - 1) * 0.5;
   loop(hx_ss, gfx_circle(x, y, r + k, 0, 1); k += 1;);
 );
-function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp, a, b, lo, hi, anc, q, sh, found, v, same, c0, s0, vk, vb) (
+function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp, a, b, lo, hi, anc, q, sh, found, v, same, c0, s0, vk, vb, nv) (
   hx_cx = w / 2; hx_cy = h / 2; hx_f = (h / 2) / tan(25 * $pi / 180);    // 50 deg vertical FOV
   gfx_set(0.105, 0.12, 0.145, 1); gfx_rect(0, 0, w, h);
 
@@ -2026,9 +2026,10 @@ function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp
   n = 0; loop(HX_NP, HX_PCF[n - floor(n / 12) * 12] ? ( HX_ST[n] = 1; ); n += 1;);
   (sc_n > 0 && sa[0] >= 0 && sa[0] < HX_NP) ? ( HX_ST[floor(sa[0])] |= 2; );
   // polyphonic: every held key owns a voice (V_ACT / V_CNT / V_NOTES); all of them are shown, nothing when no key is held
-  vk = 0;
+  nv = 0; vk = 0;
   loop(128,
     V_ACT[vk] ? (
+      nv += 1;
       vb = V_NOTES + vk * 64;
       i = 0;
       loop(min(V_CNT[vk], 64),
@@ -2047,7 +2048,7 @@ function hx_render(w, h) local(i, j, n, layer, k, st, r, fade, sa, mn, ccnt, tmp
     i = 0; loop(crp_n, v = A_CRP[i]; (v >= 0 && (found == 0 || v < mn)) ? ( mn = v; found = 1; ); i += 1;);
     anc = mn + sh;
   ) : ( found = cri_n > 0; anc = sh; );
-  (found && sc_n > 0) ? (
+  (nv > 0 && found && sc_n > 0) ? (                           // the degree marker only lights up while a key is held
     n = pmod(pv_el(sa, sc_n, calc_range(sa, sc_n, 12), anc), 12);
     HX_ST[n] |= 8;
   );
@@ -2750,7 +2751,6 @@ oy = 0; my = mouse_y / usy;
 // text field housekeeping
 tf_seen == 0 ? ( tf_id = 0; );
 last_cap = mouse_cap;
-
 
 
 
