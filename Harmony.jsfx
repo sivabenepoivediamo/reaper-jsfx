@@ -110,13 +110,14 @@ V_CNT = 20256;   // number of chord notes in the voice
 V_CH = 20512;    // output channel the voice was sent on
 V_NOTES = 21000; // 128 * 64 chord notes
 O_REF = 30000;   // 16 * 128 owner counts per (channel, note)
+V_STEPS = 220000; V_SCNT = 229000;   // per voice: the chord's steps (A_CH at trigger time, 128 * 64) and how many
 crp_n = 3; A_CRP[0] = 0; A_CRP[1] = 2; A_CRP[2] = 4;
 cri_n = 1; A_CRI[0] = 2;
 scp_n = 7; A_SCP[0] = 0; A_SCP[1] = 2; A_SCP[2] = 4; A_SCP[3] = 5; A_SCP[4] = 7; A_SCP[5] = 9; A_SCP[6] = 11;
 lists_ver = 0; lists_ver_sh = -1;
 
 i = 0; loop(NSL + 2, SH[i] = -1000000000; i += 1;);
-i = 0; loop(128, A_NDEG[i] = NONE; V_ACT[i] = 0; V_CNT[i] = 0; i += 1;);
+i = 0; loop(128, A_NDEG[i] = NONE; V_ACT[i] = 0; V_CNT[i] = 0; V_SCNT[i] = 0; i += 1;);
 i = 0; loop(2048, O_REF[i] = 0; i += 1;);
 
 // enharmonic table (the noteArrays of NoteNamingSystem): letters that may spell each pitch class
@@ -1344,16 +1345,18 @@ function voice_off(offs, key) local(i, b, och) (
   V_ACT[key] ? (
     b = V_NOTES + key * 64; och = V_CH[key];
     i = 0; loop(V_CNT[key], out_off(offs, b[i], och); i += 1;);
-    V_ACT[key] = 0; V_CNT[key] = 0;
+    V_ACT[key] = 0; V_CNT[key] = 0; V_SCNT[key] = 0;
   );
 );
 // direct = 1: the voice is just the key itself (pass-through); otherwise the current chord
-function voice_on(offs, key, vel, ch, direct) local(i, b, n, och) (
+function voice_on(offs, key, vel, ch, direct) local(i, b, n, och, sb) (
   voice_off(offs, key);
   och = out_ch == 0 ? ch : out_ch - 1;
   b = V_NOTES + key * 64;
   direct ? ( b[0] = key; n = 1; ) : (
     n = min(cm_n, 64); i = 0; loop(n, b[i] = A_CHM[i]; i += 1;);
+    sb = V_STEPS + key * 64; V_SCNT[key] = min(ch_cnt, 64);
+    i = 0; loop(V_SCNT[key], sb[i] = A_CH[i]; i += 1;);
   );
   V_ACT[key] = 1; V_CNT[key] = n; V_CH[key] = och;
   i = 0; loop(n, out_on(offs, b[i], vel, och); i += 1;);
@@ -1364,7 +1367,7 @@ function all_off(offs) local(ix, k) (
     O_REF[ix] > 0 ? ( k = floor(ix / 128); midisend(offs, 0x80 + k, ix - k * 128, 0); );
     O_REF[ix] = 0; ix += 1;
   );
-  ix = 0; loop(128, V_ACT[ix] = 0; V_CNT[ix] = 0; ix += 1;);
+  ix = 0; loop(128, V_ACT[ix] = 0; V_CNT[ix] = 0; V_SCNT[ix] = 0; ix += 1;);
 );
 
 // ---------------- held-key stack (all held input notes, oldest -> newest) ----------------
@@ -1875,7 +1878,20 @@ function scale_title(dst) local(c, ix) (
   ) : sc_src == 3 ? ( sprintf(dst, "Deep (%d events, x%d)", gen_ev, gen_mult);
   ) : ( strcpy(dst, "Custom scale"); );
 );
-function in_chord(n) local(i, r) ( r = 0; i = 0; loop(cm_n, A_CHM[i] == n ? ( r = 1; ); i += 1;); r; );
+// keyboard chord highlight: notes of every held voice (polyphonic), nothing when no key is held
+KB_CH = 205000;   // 256 flags, rebuilt by kb_flags() on every keyboard redraw
+function kb_flags() local(i, k, b) (
+  i = 0; loop(256, KB_CH[i] = 0; i += 1;);
+  k = 0;
+  loop(128,
+    V_ACT[k] ? (
+      b = V_NOTES + k * 64; i = 0;
+      loop(min(V_CNT[k], 64), KB_CH[max(0, min(255, b[i]))] = 1; i += 1;);
+    );
+    k += 1;
+  );
+);
+function in_chord(n) ( n >= 0 && n < 256 ? KB_CH[n] : 0; );
 function key_color(n, black) local(pc, sc, ch) (
   pc = pmod(n, 12); sc = bitv(scale_pcm, pc); ch = in_chord(n);
   ch ? gfx_set(0.93, 0.62, 0.28, 1) :
@@ -1895,6 +1911,7 @@ function key_label(n, black, kx, kwid, ly) local(pc, sc, ch) (
   );
 );
 function draw_kbd(x0, y0, w, h) local(low, n, pc, wi, kw, kx, isb, bw, nn) (
+  kb_flags();
   low = 60 + (floor(ch_oct + 0.5) - 5) * 12;
   nn = 49; kw = w / 29; bw = kw * 0.6;
   wi = 0; n = low;
@@ -1921,6 +1938,153 @@ function draw_kbd(x0, y0, w, h) local(low, n, pc, wi, kw, kx, isb, bw, nn) (
       key_label(n, 1, kx, bw, y0 + h * 0.6 - 20);
     ) : ( wi += 1; );
     n += 1;
+  );
+);
+
+// =====================================================================
+//  CHORD NAMING  (generalisation of chord_names.h)
+//  The C++ names a chord from a root the caller already knows, and decides 2nd/4th/6th vs 9th/11th/13th and "add" notes
+//  by octave only. Here the same vocabulary (min, dim, aug, sus2, sus4, 7, maj7, min7b5, dim7, omit 3 / omit 5...) is
+//  produced by one rule set working on pitch classes relative to a candidate root:
+//   - every note of the group is tried as the root; the reading with the lowest "oddness" penalty wins, the lowest note
+//     breaks ties (so inversions come out as slash chords: C/E)
+//   - 9 / 11 / 13 shorthand ("Cmaj9", "C13", "Cmin11") when a 7th is present, otherwise "add" notes; a 6th gives C6 / C6/9
+//   - extensions that were not absorbed are listed in brackets: C7(b9,#11)
+//   - nothing is silently dropped (the C++ lost a 9th/11th/13th above a plain triad)
+// =====================================================================
+CN_NT = 206000;   // notes of the group being named (sorted, up to 128)
+CN_V  = 206200;   // scratch copy of one voice (64)
+CN_FL = 206300;   // interval flags (24)
+CN_ST = 230000;   // merged steps (8192)
+
+function cn_lab(k, h7, hi, dst) (
+  k == 1 ? strcat(dst, (h7 || hi) ? "b9" : "b2") :
+  k == 2 ? strcat(dst, (h7 || hi) ? "9" : "2") :
+  k == 3 ? strcat(dst, "#9") :
+  k == 4 ? strcat(dst, "3") :
+  k == 5 ? strcat(dst, (h7 || hi) ? "11" : "4") :
+  k == 6 ? strcat(dst, (h7 || hi) ? "#11" : "#4") :
+  k == 7 ? strcat(dst, "5") :
+  k == 8 ? strcat(dst, (h7 || hi) ? "b13" : "b6") :
+  k == 9 ? strcat(dst, (h7 || hi) ? "13" : "6") :
+  k == 10 ? strcat(dst, "7") : strcat(dst, "maj7");
+);
+
+// P = pitch classes relative to the candidate root (bit 0 = root), E = those of them that sit an octave or more above the root note.
+// Builds the name into dst and returns its penalty (lower = more natural reading).
+function cn_eval(P, E, rpc, bpc, dst) local(pen, used, rem, third, qk, post, sev, six, top, omit3, omit5, flb5, h7, k, nl, e9, e11, e13, rich) (
+  pen = 0; used = 1; qk = 0; post = 0; sev = 0; six = 0; top = 0; omit3 = 0; omit5 = 0; flb5 = 0;
+  nn_name(rpc, dst);
+  P == 1 ? ( 0; ) : (
+    // --- third and fifth: quality (qk 0 major, 1 min, 2 dim, 3 aug, 4 maj, 5 power) and suspension (post 1 sus4, 2 sus2)
+    third = bitv(P, 4) ? 1 : bitv(P, 3) ? 2 : 0;
+    third == 1 ? ( used |= 16; ) : third == 2 ? ( used |= 8; );
+    third == 1 ? (
+      bitv(P, 7) ? ( used |= 128; ) :
+      bitv(P, 8) ? ( qk = 3; used |= 256; pen += 0.6; ) :
+      bitv(P, 6) ? ( flb5 = 1; used |= 64; pen += 0.3; ) :
+                   ( omit5 = 1; pen += 1; );
+    ) : third == 2 ? (
+      qk = 1;
+      bitv(P, 7) ? ( used |= 128; ) :
+      bitv(P, 6) ? ( qk = 2; used |= 64; pen += 0.3; ) :
+                   ( omit5 = 1; pen += 1; );
+    ) : (
+      bitv(P, 5) ? ( post = 1; used |= 32; ) : bitv(P, 2) ? ( post = 2; used |= 4; );
+      bitv(P, 7) ? ( used |= 128; ) : bitv(P, 6) ? ( flb5 = 1; used |= 64; pen += 0.3; ) : ( omit5 = 1; pen += 1.5; );
+      post > 0 ? ( pen += 0.6; ) : ( omit3 = 1; );
+    );
+    // --- seventh (sev 1 minor/dominant, 2 major, 3 diminished)
+    (qk == 2 && bitv(P, 9) && !bitv(P, 10) && !bitv(P, 11)) ? ( sev = 3; used |= 512; ) :
+    bitv(P, 11) ? ( sev = 2; used |= 2048; ) :
+    bitv(P, 10) ? ( sev = 1; used |= 1024; );
+    h7 = sev > 0;
+    ((qk == 2 || qk == 3) && sev == 2) ? ( pen += 0.5; );
+    omit3 ? ( pen += h7 ? 1.5 : 3; );
+    (qk == 2 && sev == 1) ? ( qk = 1; post = 3; );                       // min7b5
+    flb5 ? ( sev > 0 ? ( post = 3; ) : ( third == 1 ? ( qk = 4; ); post = 4; ); );         // 7b5 / maj(b5)
+    (third == 0 && post == 0 && sev == 0 && omit5 == 0) ? ( qk = 5; omit3 = 0; pen -= 2; );   // root + fifth: power chord
+    // --- stacked extension shorthand: 9 / 11 / 13 replace the 7 (not on dim7 / b5 chords)
+    rem = P - (P & used);
+    (h7 && qk != 2 && sev != 3 && post != 3 && post != 4) ? (
+      e9 = bitv(rem, 2); e11 = bitv(rem, 5); e13 = bitv(rem, 9);
+      e13 ? ( top = 13; used |= 512 | (e9 ? 4 : 0) | (e11 ? 32 : 0); pen += 0.4; ) :
+      (e9 && e11) ? ( top = 11; used |= 4 | 32; pen += 0.3; ) :
+      e9 ? ( top = 9; used |= 4; pen += 0.1; );
+    );
+    // --- no 7th: a natural 6th (and 9th) is a 6 / 6/9 chord
+    (!h7 && third != 0 && post == 0 && (qk == 0 || qk == 1) && bitv(P, 9)) ? (
+      six = bitv(P, 2) ? 2 : 1; used |= 512; six == 2 ? ( used |= 4; );
+    );
+    rem = P - (P & used);
+    // --- what is left over
+    strcpy(#cn_x, ""); nl = 0; k = 1;
+    loop(11,
+      bitv(rem, k) ? (
+        nl > 0 ? strcat(#cn_x, ",");
+        cn_lab(k, h7, bitv(E, k), #cn_x);
+        nl += 1;
+        pen += (k == 2 || k == 5 || k == 9) ? 0.3 : 0.7;
+      );
+      k += 1;
+    );
+    (third == 1 && omit5 && sev == 0 && six == 0 && nl == 0) ? ( qk = 4; );   // "Cmaj (omit 5)"
+    // --- assemble
+    qk == 1 ? strcat(dst, "min") : qk == 2 ? strcat(dst, "dim") : qk == 3 ? strcat(dst, "aug") : qk == 4 ? strcat(dst, "maj") : qk == 5 ? strcat(dst, "5");
+    six == 1 ? strcat(dst, "6") : six == 2 ? strcat(dst, "6/9");
+    sev == 3 ? strcat(dst, "7") : sev > 0 ? (
+      (sev == 2 && qk != 0) ? strcat(dst, "/");
+      sev == 2 ? strcat(dst, "maj");
+      strcat(dst, top == 13 ? "13" : top == 11 ? "11" : top == 9 ? "9" : "7");
+    );
+    post == 1 ? strcat(dst, "sus4") : post == 2 ? strcat(dst, "sus2") : post == 3 ? strcat(dst, "b5") : post == 4 ? strcat(dst, "(b5)");
+    nl > 0 ? ( h7 ? ( strcat(dst, "("); strcat(dst, #cn_x); strcat(dst, ")"); ) : ( strcat(dst, " add"); strcat(dst, #cn_x); ); );
+    bpc != rpc ? ( nn_name(bpc, #cn_b); strcat(dst, "/"); strcat(dst, #cn_b); pen += 0.9; );
+    rich = top > 0 || nl > 0;
+    (omit3 && omit5) ? strcat(dst, " (omit 3,5)") :
+    omit3 ? strcat(dst, " (omit 3)") :
+    (omit5 && (!rich || third == 0)) ? strcat(dst, " (omit 5)");
+  );
+  pen;
+);
+
+// nt = sorted, distinct MIDI notes. dst = chord name, ivs = intervals from the chosen root ("0 4 7 11 14").
+function cn_analyze(nt, n, dst, ivs) local(i, j, k, pc, bpc, first, P, E, iv, pen, best, bi) (
+  strcpy(dst, ""); strcpy(ivs, "");
+  n > 0 ? (
+    bpc = pmod(nt[0], 12);
+    best = 1000000; bi = 0;
+    i = 0;
+    loop(n,
+      pc = pmod(nt[i], 12);
+      first = 1; j = 0; loop(i, pmod(nt[j], 12) == pc ? ( first = 0; ); j += 1;);
+      first ? (
+        P = 1; E = 0; j = 0;
+        loop(n,
+          iv = nt[j] - nt[i];
+          while (iv < 0) ( iv += 12; );
+          while (iv >= 24) ( iv -= 12; );
+          k = pmod(iv, 12);
+          k > 0 ? ( P |= 2^k; iv >= 12 ? ( E |= 2^k; ); );
+          j += 1;
+        );
+        pen = cn_eval(P, E, pc, bpc, #cn_t);
+        pen < best ? ( best = pen; bi = i; strcpy(dst, #cn_t); );
+      );
+      i += 1;
+    );
+    i = 0; loop(24, CN_FL[i] = 0; i += 1;);
+    i = 0;
+    loop(n,
+      iv = nt[i] - nt[bi];
+      while (iv < 0) ( iv += 12; );
+      while (iv >= 24) ( iv -= 12; );
+      iv == 12 ? ( iv = 0; );
+      CN_FL[iv] = 1;
+      i += 1;
+    );
+    i = 0;
+    loop(24, CN_FL[i] ? ( strlen(ivs) > 0 ? strcat(ivs, " "); sprintf(#cn_n, "%d", i); strcat(ivs, #cn_n); ); i += 1;);
   );
 );
 
@@ -2530,10 +2694,50 @@ strcpy(#sc_pos, ""); i = 0;
 loop(sc_n, sprintf(#tp, "%d ", A_SC[i]); strcat(#sc_pos, #tp); i += 1;);
 strcpy(#sc_names, ""); i = 0;
 loop(sc_n, nn_name(pmod(A_SC[i], 12), #tn3); strcat(#sc_names, #tn3); strcat(#sc_names, " "); i += 1;);
-strcpy(#cn, ""); i = 0;
-loop(cm_n, note_name(A_CHM[i], #tn2); strcat(#cn, #tn2); strcat(#cn, "  "); i += 1;);
-strcpy(#cp, ""); i = 0;
-loop(ch_cnt, sprintf(#tp, "%d ", A_CH[i]); strcat(#cp, #tp); i += 1;);
+// header chord: one group per held key (polyphonic), groups separated by "|"; empty when no key is held
+strcpy(#cn, ""); strcpy(#cp, ""); hv_n = 0; hv_k = 0;
+loop(128,
+  V_ACT[hv_k] ? (
+    hv_n > 0 ? ( strcat(#cn, "|  "); V_SCNT[hv_k] > 0 ? strcat(#cp, "|  "); );
+    hv_n += 1;
+    hv_b = V_NOTES + hv_k * 64; i = 0;
+    loop(min(V_CNT[hv_k], 64), note_name(hv_b[i], #tn2); strcat(#cn, #tn2); strcat(#cn, "  "); i += 1;);
+    hv_b = V_STEPS + hv_k * 64; i = 0;
+    loop(V_SCNT[hv_k], sprintf(#tp, "%d ", hv_b[i]); strcat(#cp, #tp); i += 1;);
+  );
+  hv_k += 1;
+);
+// chord names: Whole (cn_mode 0) = every held note merged and sorted, one name; Per chord (1) = one name per held key, separated by "|"
+strcpy(#cnm, ""); strcpy(#civ, "");
+cn_mode == 0 ? (
+  kb_flags();
+  cn_cnt = 0; i = 0; loop(128, KB_CH[i] ? ( CN_NT[cn_cnt] = i; cn_cnt += 1; ); i += 1;);
+  strcpy(#cn, ""); i = 0; loop(cn_cnt, note_name(CN_NT[i], #tn2); strcat(#cn, #tn2); strcat(#cn, "  "); i += 1;);
+  cn_sc = 0; hv_k = 0;
+  loop(128,
+    V_ACT[hv_k] ? ( hv_b = V_STEPS + hv_k * 64; i = 0; loop(V_SCNT[hv_k], CN_ST[cn_sc] = hv_b[i]; cn_sc += 1; i += 1;); );
+    hv_k += 1;
+  );
+  strcpy(#cp, "");
+  cn_sc > 0 ? (
+    sort_asc(CN_ST, cn_sc); cn_p = -1000000; i = 0;
+    loop(cn_sc, CN_ST[i] != cn_p ? ( sprintf(#tp, "%d ", CN_ST[i]); strcat(#cp, #tp); cn_p = CN_ST[i]; ); i += 1;);
+  );
+  cn_analyze(CN_NT, cn_cnt, #cnm, #civ);
+) : (
+  hv_k = 0;
+  loop(128,
+    V_ACT[hv_k] ? (
+      hv_b = V_NOTES + hv_k * 64; cn_c = min(V_CNT[hv_k], 64); i = 0;
+      loop(cn_c, CN_NT[i] = hv_b[i]; i += 1;);
+      sort_asc(CN_NT, cn_c);
+      cn_analyze(CN_NT, cn_c, #cn_a, #cn_i);
+      strlen(#cnm) > 0 ? ( strcat(#cnm, "  |  "); strcat(#civ, "  |  "); );
+      strcat(#cnm, #cn_a); strcat(#civ, #cn_i);
+    );
+    hv_k += 1;
+  );
+);
 
 gfx_set(0.45, 0.47, 0.52, 1); ft(10, 36, "SCALE", 3);
 // Always show the root. Auto, a non-library source or any scale transform: detected library name ("from" = baseline / untransformed scale, only when changed); otherwise the selected scale's name
@@ -2552,8 +2756,17 @@ sc_n > 0 ? (
 gfx_set(0.55, 0.78, 0.95, 1); fit_head(#hs, 530, 2); ft(10, 49, #hs, 2);
 gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hp, #sc_pos); strcpy(#hp2, "positions: "); strcat(#hp2, #hp); strcat(#hp2, "   notes: "); strcat(#hp2, #sc_names); fit_head(#hp2, 530, 1); ft(10, 80, #hp2, 1);
 gfx_set(0.45, 0.47, 0.52, 1); ft(562, 36, "CHORD", 3);
-gfx_set(0.93, 0.62, 0.28, 1); strcpy(#hc, #cn); cm_n == 0 ? strcpy(#hc, "-"); fit_head(#hc, 520, 2); ft(562, 49, #hc, 2);
-gfx_set(0.60, 0.62, 0.67, 1); strcpy(#hq, "steps: "); strcat(#hq, #cp); fit_head(#hq, 520, 1); ft(562, 80, #hq, 1);
+// chord name: same font and position as the scale name (drops to the small font only if a long "Per chord" list cannot fit)
+strcpy(#hn, #cnm); hv_n == 0 ? strcpy(#hn, "-");
+hn_f = tw_(#hn, 2) > 520 ? 1 : 2;
+fit_head(#hn, 520, hn_f);
+gfx_set(0.93, 0.62, 0.28, 1); ft(562, hn_f == 2 ? 49 : 54, #hn, hn_f);
+// info rows: steps and notes each get the full column width
+gfx_set(0.60, 0.62, 0.67, 1);
+strcpy(#hq, "steps: "); strlen(#cp) > 0 ? strcat(#hq, #cp) : strcat(#hq, "-");
+fit_head(#hq, 520, 1); ft(562, 80, #hq, 1);
+strcpy(#hq, "notes: "); hv_n > 0 ? strcat(#hq, #cn) : strcat(#hq, "-");
+fit_head(#hq, 520, 1); ft(562, 97, #hq, 1);
 in_mode == 0 ? strcpy(#ml, "Root: each held key sets its own root and plays its chord in the key's octave (polyphonic)");
 in_mode == 1 ? strcpy(#ml, "Degree: each held white key plays the chord of its degree (polyphonic, 0-127)");
 in_mode == 2 ? strcpy(#ml, "Direct: polyphonic pass-through");
@@ -2562,7 +2775,7 @@ in_mode == 3 ? (
   auto_sub == 1 ? sprintf(#ml, "Auto / Transposition: transposition %d", auto_mod_t < 0 ? 0 : auto_mod_t) :
                   strcpy(#ml, adapt_on ? "Auto / Adaptive: scale adapted to the played notes" : "Auto / Adaptive: scale not adapted yet");
 );
-gfx_set(0.45, 0.47, 0.52, 1); fit_head(#ml, LW - 20, 3); ft(10, 100, #ml, 3);
+gfx_set(0.45, 0.47, 0.52, 1); fit_head(#ml, 530, 3); ft(10, 100, #ml, 3);
 
 // options row
 gfx_set(0.60, 0.62, 0.67, 1); ft(10, 122, "Names", 1); lx = 10 + tw_("Names", 1) + 8;
@@ -2573,6 +2786,10 @@ lx += 24;
 gfx_set(0.60, 0.62, 0.67, 1); ft(lx, 122, "Common notes", 1); lx += tw_("Common notes", 1) + 8;
 lx += sopt(lx, 118, 22, "Hold", 38, 0);
 lx += sopt(lx, 118, 22, "Retrigger", 38, 1);
+lx = max(lx + 24, 562);   // "Chord view" starts on the left edge of the CHORD column
+gfx_set(0.60, 0.62, 0.67, 1); ft(lx, 122, "Chord view", 1); lx += tw_("Chord view", 1) + 8;
+cn_w = sbtn(lx, 118, 22, "Whole", cn_mode == 0); sb_hit ? ( cn_mode = 0; ); lx += cn_w;
+cn_w = sbtn(lx, 118, 22, "Per chord", cn_mode == 1); sb_hit ? ( cn_mode = 1; ); lx += cn_w;
 hxb_w = tw_("Visualizer", 1) + 16;
 btn(LW - 10 - hxb_w, 118, hxb_w, 22, "Visualizer", hx_show, 1) ? ( hx_show = 1 - hx_show; );
 
@@ -2751,6 +2968,8 @@ oy = 0; my = mouse_y / usy;
 // text field housekeeping
 tf_seen == 0 ? ( tf_id = 0; );
 last_cap = mouse_cap;
+
+
 
 
 

@@ -8,7 +8,7 @@ This is a personal playground, so expect things to be rough, opinionated and occ
 
 | Effect | File | Type | What it does |
 | --- | --- | --- | --- |
-| Harmony | `Harmony.jsfx` | MIDI | Scale and chord engine: turns single notes into chords built from a transformable scale, with a scale analysis card and a 3D helix visualizer |
+| Harmony | `Harmony.jsfx` | MIDI | Scale and chord engine: turns single notes into chords built from a transformable scale, with live chord names, a scale analysis card and a 3D helix visualizer that draws every held chord |
 | Block Chords | `Block Chords.jsfx` | MIDI | Turns single-note melodies into block chords |
 | ADT Double Tracker | `ADT Double Tracker.jsfx` | Audio | Artificial double tracking: a varispeed-delayed second take with separate pan, drive and level per path |
 | Boss CE-1 Chorus Ensemble | `Boss CE-1 Chorus Ensemble.jsfx` | Audio | BBD-style chorus and vibrato inspired by the Boss CE-1 Chorus Ensemble |
@@ -23,7 +23,7 @@ A MIDI scale and chord engine. Each note you play is expanded into a chord that 
 
 Unlike Block Chords, which harmonizes a melody, Harmony treats each key as a command. Depending on the **Input** mode, the key sets the root, picks a scale degree, or lets the plugin work out which scale you are playing in.
 
-The effect has its own editor that scales to fit the window, with a 3D helix visualizer and a scale analysis card (see below). A keyboard strip above the panels shows the live scale (blue), the current chord (orange) and the keys you are holding. Note names are spelled to fit the scale, with the right flats or sharps (see Note names below).
+The effect has its own editor that scales to fit the window, with a 3D helix visualizer, a scale analysis card and live chord names (see below). A keyboard strip above the panels shows the live scale (blue), the chords of every held key (orange) and the keys you are holding. Note names are spelled to fit the scale, with the right flats or sharps (see Note names below).
 
 ### How it works
 
@@ -104,6 +104,41 @@ Notes outside the scale, such as chord tones, use the same sharp or flat directi
 
 Auto-voicing remembers the previous chord. The **Reset** button next to it forgets it, so the next chord is voiced from scratch.
 
+### Chord names
+
+The **CHORD** column of the header names what is sounding, in the same large type as the scale name. Two rows sit below the name: **steps** (the scale steps of the chord) and **notes** (the spelled note names). With no key held, the name shows `-`.
+
+The **Chord view** buttons in the header decide how several held keys are named:
+
+- **Whole** (the default): every sounding note of every held chord is merged, sorted and read as one chord, so a polychord gets a single name. Holding C and F in Root mode (C4 E4 G4 and F4 A4 C5) reads `C6 add4`. The steps and notes rows are merged the same way, without duplicates.
+- **Per chord:** one name per held key, in key order and separated by `|`, for example `C  |  F`. The steps and notes rows are grouped per chord too. If the list is too long for the column, the text drops to the smaller font.
+
+The name is read from the notes that actually sound, after every scale and chord transform, so Spread, Close, Resize and Auto-voicing can change it. It is an analysis of the pitches, not a lookup, and it never silently drops a note.
+
+#### How a name is chosen
+
+No root is assumed. Every distinct pitch class in the group is tried as the root, and each reading gets a penalty for anything odd about it: a missing third or fifth, leftover tones that need listing, a bass that is not the root. The reading with the lowest penalty wins, and the lowest note breaks ties. Triad inversions therefore come out as slash chords (E G C reads `C/E`). Where another root explains the notes more simply, that reading wins instead, so a first-inversion seventh chord such as E G B C can read as `Emin addb6`.
+
+The root and bass note are spelled with the same sharps or flats as every other note name in the editor (see Note names), so the **Names** setting applies. A single note, or one pitch class in several octaves, shows just its name.
+
+| Part of the name | Meaning | Examples |
+| --- | --- | --- |
+| bare root | major triad | `C` |
+| `min`, `dim`, `aug` | minor, diminished, augmented triad | `Cmin`, `Cdim`, `Caug` |
+| `5` | root and fifth only | `C5` |
+| `sus2`, `sus4` | suspended, no third | `Csus4`, `C7sus4` |
+| `6`, `6/9` | natural sixth, with or without the ninth | `C6`, `C6/9` |
+| `7`, `maj7` | dominant or minor seventh, major seventh | `C7`, `Cmin7`, `Cmaj7` |
+| `dim7`, `min7b5`, `min/maj7` | diminished seventh, half-diminished, minor-major seventh | `Cdim7`, `Cmin7b5`, `Cmin/maj7` |
+| `b5`, `(b5)` | flat fifth | `C7b5`, `Cmaj(b5)` |
+| `9`, `11`, `13` | stacked extensions, used when a seventh is present | `C9`, `Cmaj9`, `Cmin11`, `C13` |
+| `add...` | extra notes on a chord without a seventh | `C add9`, `Cmin add9`, `C add4` |
+| `(...)` | extra or altered tones after a seventh | `C7(b9)`, `C7(b9,#11)`, `Cmaj7(#11)` |
+| `(omit 3)`, `(omit 5)`, `(omit 3,5)` | a missing third or fifth | `C7 (omit 3)`, `Cmaj (omit 5)` |
+| `/note` | the bass is not the root | `C/E`, `C7/Bb` |
+
+Without a seventh, an added note is named by its octave: a second, fourth or sixth within the first octave above the root note (`C add2`, `C add4`), a ninth, eleventh or thirteenth when it sits an octave or more above it (`C add9`, `C add11`). With a seventh present, those tones always use the 9, 11 and 13 names.
+
 ### Editor size and layout
 
 The editor opens at 1500 x 826 and scales evenly to fit the window. The space for the Scale Analysis card is always reserved at the bottom, so showing or hiding it changes nothing else. If the window is smaller than the design, everything scales down together. REAPER remembers window sizes, so drag an existing instance taller once (about 826 pixels at the default width).
@@ -112,8 +147,11 @@ The editor opens at 1500 x 826 and scales evenly to fit the window. The space fo
 
 The helix to the right of the panels (the **Visualizer** button in the header turns it on and off) shows 120 notes, 10 octaves of 12 pitch classes, on a helix with one ring per octave. The colours match the legend in its top-left corner:
 
-- **root** (light orange), **scale** (blue), **degree** (red, the scale degree the chord is built from) and **chord** (orange, joined by a line from the lowest to the highest note). Other notes stay dim.
+- **root** (light orange), **scale** (blue), **degree** (red, the scale degree the chord is built from) and **chord** (orange). Other notes stay dim.
+- Chord and degree light up only while a key is held. With nothing held, the helix shows just the scale and its root.
 - With Chord **Negative** on, it shows the reflected scale the chord is picked from.
+
+The helix is polyphonic: every held key owns a chord, and all of them are shown at once, so a polychord is drawn as it sounds. Hold C and D in Root mode and the helix lights a C triad and a D triad together. Each chord gets its own closed orange polygon through its notes, from the lowest note up to the highest and back to the lowest (a two-note chord is a single line), so you can see which notes belong to which chord. A note shared by two chords is lit once, and the chord notes are drawn on top of the lines. The polygons follow the notes that actually sound, so Spread, Close, Resize and Auto-voicing change their shape. The helix covers MIDI notes 12 to 131 (C0 to B9), so anything lower is not drawn.
 
 Drag to rotate and scroll to zoom. The controls above the view are **Expand** (the helix fills the whole window, and the control bar appears when the mouse is over the top strip. **Back** or Esc returns), play/pause, **speed** (0.25x to 4x) and **Reset** (back to the default view and zoom). The helix turns all the time at a steady, clock-based speed (about 1 degree per second at 1.00x). Dragging, zooming, clicking and resetting never pause it, and only the pause button stops it. The square's bottom edge lines up with the bottom of the panels.
 
@@ -182,6 +220,7 @@ In Adaptive, returning to the initial scale also drops the adapted scale.
 2. Pick a scale in the **Scale** panel. Use the category arrows and the list, or the search box, or switch the source to Euclid, C-D, Deep or Custom.
 3. Choose an **Input** mode and play. In Root mode every key is a root. In Degree mode the white keys walk up the scale. In Auto mode just play in any key.
 4. Shape the chord with the **Chord** panel (the rule and the number of voices) and the **Chord Transform** panel (inversions, spreading, voice leading and so on).
+5. Read the chord name in the header. Hold several keys and switch **Chord view** between Whole (one name for the stack) and Per chord (one name per key).
 
 The values in the editor can be dragged or scrolled. Clicking the left or right half of a value steps it down or up, and right-click sets it back to its default. In the chord rule, each number in a list is a chip: click to add 1, right-click to subtract 1, shift-click to delete, and use the `+` chip to add an entry. Lists are limited to 64 entries.
 
@@ -253,7 +292,7 @@ All of these are sliders, so they can be automated. **Input**:
 | Chord TX: Resize End | -24 to +24 | Last note of the resized chord |
 | Chord TX: Auto-voicing | Off, On | Smooth voice leading from the previous chord |
 
-The chord rule lists (degrees, interval steps) and the custom scale are not sliders, but they are saved with the project and with FX presets. The search box in the library list is not saved.
+The chord rule lists (degrees, interval steps) and the custom scale are not sliders, but they are saved with the project and with FX presets. The search box in the library list is not saved. **Chord view** and the **Visualizer** button are editor settings: they are not sliders, so they cannot be automated, and they return to their defaults when the effect is reloaded.
 
 The 39 sliders appear in this order: Scale source (5), Scale transform (7), Chord (5), Chord transform (14), then Input and Output (8). Reordering them changes how saved presets and automation map to the controls.
 
@@ -268,6 +307,8 @@ The 39 sliders appear in this order: Scale source (5), Scale transform (7), Chor
 | Input: Common Notes | Hold |
 | Note names: Accidentals | Auto |
 | Output Channel | Same as input |
+| Chord view | Whole |
+| Visualizer | On |
 | Scale: Source | Library |
 | Scale: Library | Major and minor, Ionian (Major) |
 | Scale: Generator Events | 7 |
